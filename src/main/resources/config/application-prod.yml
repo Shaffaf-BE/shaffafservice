@@ -47,7 +47,7 @@ spring:
     type: com.zaxxer.hikari.HikariDataSource
     url: jdbc:postgresql://localhost:5432/shaffafservice
     username: shaffaf
-    password: ${PG.DB.PROD}
+    password: ${PG_DB_PROD}
     hikari:
       poolName: Hikari
       auto-commit: false
