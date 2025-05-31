@@ -43,6 +43,7 @@ spring:
         prefer-ip-address: true
       host: localhost
       port: 8500
+      token: e56a8185-b6ba-e20f-f7c9-a5183c24c854
   datasource:
     type: com.zaxxer.hikari.HikariDataSource
     url: jdbc:postgresql://localhost:5432/shaffafservice
