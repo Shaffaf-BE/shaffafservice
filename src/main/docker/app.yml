@@ -20,13 +20,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 40
-    depends_on:
-      postgresql:
-        condition: service_healthy
-  postgresql:
-    extends:
-      file: ./postgresql.yml
-      service: postgresql
   consul:
     extends:
       file: ./consul.yml
