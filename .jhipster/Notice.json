@@ -1,0 +1,58 @@
+{
+  "annotations": {
+    "changelogDate": "20250601084256"
+  },
+  "applications": "*",
+  "clientRootFolder": "shaffafservice",
+  "databaseType": "sql",
+  "dto": "mapstruct",
+  "fields": [
+    {
+      "fieldName": "title",
+      "fieldType": "String",
+      "fieldValidateRules": ["required"]
+    },
+    {
+      "fieldName": "description",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "displayStartDate",
+      "fieldType": "LocalDate"
+    },
+    {
+      "fieldName": "displayEndDate",
+      "fieldType": "LocalDate"
+    },
+    {
+      "fieldName": "addedBy",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "createdBy",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "createdDate",
+      "fieldType": "Instant"
+    },
+    {
+      "fieldName": "lastModifiedBy",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "lastModifiedDate",
+      "fieldType": "Instant"
+    },
+    {
+      "fieldName": "deletedOn",
+      "fieldType": "Instant"
+    }
+  ],
+  "microserviceName": "shaffafservice",
+  "name": "Notice",
+  "pagination": "pagination",
+  "relationships": [],
+  "searchEngine": "no",
+  "service": "serviceImpl"
+}

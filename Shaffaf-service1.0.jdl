@@ -5,7 +5,7 @@ entity Seller {
     email String required
     phoneNumber String required
     status Status required
-	createdBy String 
+	createdBy String
     createdDate Instant
     lastModifiedBy String
     lastModifiedDate Instant
@@ -19,7 +19,7 @@ entity SellerCommission {
     commissionPaidOn Instant
     commissionPaidBy String
     phoneNumber String required
-	createdBy String 
+	createdBy String
     createdDate Instant
     lastModifiedBy String
     lastModifiedDate Instant
@@ -38,7 +38,7 @@ entity Project {
     numberOfUnits Integer required
     consentProvidedBy String
     consentProvidedOn Instant
-    createdBy String 
+    createdBy String
     createdDate Instant
     lastModifiedBy String
     lastModifiedDate Instant
@@ -50,7 +50,7 @@ entity ProjectDiscount {
     discountStartDate Instant required
     discountEndDate Instant required
     discount BigDecimal required
-    createdBy String 
+    createdBy String
     createdDate Instant
     lastModifiedBy String
     lastModifiedDate Instant
@@ -60,7 +60,7 @@ entity ProjectDiscount {
 entity ExpenseType {
     name String required
     description String
-    createdBy String 
+    createdBy String
     createdDate Instant
     lastModifiedBy String
     lastModifiedDate Instant
@@ -73,7 +73,7 @@ entity Expense {
     expenseDate Instant required
     submittedBy String required
     amount BigDecimal required
-    createdBy String 
+    createdBy String
     createdDate Instant
     lastModifiedBy String
     lastModifiedDate Instant
@@ -86,7 +86,7 @@ entity Notice {
     displayStartDate LocalDate
     displayEndDate LocalDate
     addedBy String
-    createdBy String 
+    createdBy String
     createdDate Instant
     lastModifiedBy String
     lastModifiedDate Instant
@@ -95,8 +95,8 @@ entity Notice {
 
 entity ComplainType {
 	title String required
-    description String 
-    createdBy String 
+    description String
+    createdBy String
     createdDate Instant
     lastModifiedBy String
     lastModifiedDate Instant
@@ -111,7 +111,7 @@ entity Complain {
     resolutionComments String
     resolvedOn Instant
     resolvedBy String
-    createdBy String 
+    createdBy String
     createdDate Instant
     lastModifiedBy String
     lastModifiedDate Instant
@@ -121,7 +121,7 @@ entity Complain {
 entity ComplainComment {
 	comment String required
     addedBy String
-	createdBy String 
+	createdBy String
     createdDate Instant
     lastModifiedBy String
     lastModifiedDate Instant
@@ -130,7 +130,7 @@ entity ComplainComment {
 
 entity ComplainStatus {
 	status String required
-	createdBy String 
+	createdBy String
     createdDate Instant
     lastModifiedBy String
     lastModifiedDate Instant
@@ -142,7 +142,7 @@ entity UnionMember {
     lastName String required
     email String required
     phoneNumber String required
-	createdBy String 
+	createdBy String
     createdDate Instant
     lastModifiedBy String
     lastModifiedDate Instant
@@ -154,7 +154,7 @@ entity Employee {
     lastName String required
     email String required
     phoneNumber String required
-    createdBy String 
+    createdBy String
     createdDate Instant
     lastModifiedBy String
     lastModifiedDate Instant
@@ -168,7 +168,7 @@ entity FeesConfiguration {
     isRecurring Boolean required
     dueDate LocalDate
     configuredBy String
-    createdBy String 
+    createdBy String
     createdDate Instant
     lastModifiedBy String
     lastModifiedDate Instant
@@ -182,7 +182,7 @@ entity FeesCollection {
     amountCollectedBy String
     amountCollectedOn Instant
     paidBy String
-    createdBy String 
+    createdBy String
     createdDate Instant
     lastModifiedBy String
     lastModifiedDate Instant
@@ -192,7 +192,7 @@ entity FeesCollection {
 //House Type
 entity UnitType{
 	name String required
-    createdBy String 
+    createdBy String
     createdDate Instant
     lastModifiedBy String
     lastModifiedDate Instant
@@ -202,7 +202,7 @@ entity UnitType{
 //Example: A, B, C or Galaxy or any unique name
 entity Block{
 	name String required
-    createdBy String 
+    createdBy String
     createdDate Instant
     lastModifiedBy String
     lastModifiedDate Instant
@@ -212,7 +212,7 @@ entity Block{
 //House or flat
 entity Unit{
 	unitNumber String required
-    createdBy String 
+    createdBy String
     createdDate Instant
     lastModifiedBy String
     lastModifiedDate Instant
@@ -222,7 +222,7 @@ entity Unit{
 //Owner or Tenant
 entity ResidentType{
 	type String required
-    createdBy String 
+    createdBy String
     createdDate Instant
     lastModifiedBy String
     lastModifiedDate Instant
@@ -233,7 +233,7 @@ entity Resident {
     lastName String
     email String
     phoneNumber String
-    createdBy String 
+    createdBy String
     createdDate Instant
     lastModifiedBy String
     lastModifiedDate Instant
@@ -242,13 +242,12 @@ entity Resident {
 
 // Enums
 enum Status {
-    ACTIVE, INACTIVE, DISABLED_TEMPORARILY, DISABLED_PERMANENTLY 
+    ACTIVE, INACTIVE, DISABLED_TEMPORARILY, DISABLED_PERMANENTLY
 }
 
 // Relationships
 relationship OneToMany {
 	Seller{projects} to Project{seller}
-    Seller{attachments} to Attachment
     Project{sellerCommissions} to SellerCommission
     Project{projectDiscount} to ProjectDiscount
     Project{unionMembers} to UnionMember{project}
@@ -258,13 +257,11 @@ relationship OneToMany {
     Block{units} to Unit
     Project{expenseTypes} to ExpenseType
     ExpenseType{expenses} to Expense
-    Expense{attachments} to Attachment
     Project{notices} to Notice
     Project{complainTypes} to ComplainType
     ComplainType{complains} to Complain
     Complain{complainComments} to ComplainComment
     ComplainStatus{complains} to Complain
-    FeesType{fees} to FeesConfiguration
     FeesConfiguration{feesCollection} to FeesCollection
     Block{feesConfiguration} to FeesConfiguration
     UnitType{feesConfiguration} to FeesConfiguration
@@ -283,10 +280,8 @@ relationship ManyToMany {
 //    Resident{user} to User
 //}
 
-// Pagination
+dto * with mapstruct
+service * with serviceImpl
 paginate * with pagination
 
-// DTOs and Service options
-dto * with mapstruct
-service * with serviceClass
 

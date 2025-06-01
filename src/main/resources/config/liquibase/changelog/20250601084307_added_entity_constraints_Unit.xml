@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd
+                        http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd">
+    <!--
+        Added the constraints for entity Unit.
+    -->
+    <changeSet id="20250601084307-2" author="jhipster">
+
+        <addForeignKeyConstraint baseColumnNames="unit_id"
+                                 baseTableName="rel_unit__fees_collections"
+                                 constraintName="fk_rel_unit__fees_collections__unit_id"
+                                 referencedColumnNames="id"
+                                 referencedTableName="unit"
+                                 />
+
+        <addForeignKeyConstraint baseColumnNames="fees_collections_id"
+                                 baseTableName="rel_unit__fees_collections"
+                                 constraintName="fk_rel_unit__fees_collections__fees_collections_id"
+                                 referencedColumnNames="id"
+                                 referencedTableName="fees_collection"
+                                 />
+
+        <addForeignKeyConstraint baseColumnNames="unit_type_id"
+                                 baseTableName="unit"
+                                 constraintName="fk_unit__unit_type_id"
+                                 referencedColumnNames="id"
+                                 referencedTableName="unit_type"
+                                 />
+
+        <addForeignKeyConstraint baseColumnNames="block_id"
+                                 baseTableName="unit"
+                                 constraintName="fk_unit__block_id"
+                                 referencedColumnNames="id"
+                                 referencedTableName="block"
+                                 />
+    </changeSet>
+</databaseChangeLog>

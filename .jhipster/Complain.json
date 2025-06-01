@@ -1,0 +1,77 @@
+{
+  "annotations": {
+    "changelogDate": "20250601084258"
+  },
+  "applications": "*",
+  "clientRootFolder": "shaffafservice",
+  "databaseType": "sql",
+  "dto": "mapstruct",
+  "fields": [
+    {
+      "fieldName": "title",
+      "fieldType": "String",
+      "fieldValidateRules": ["required"]
+    },
+    {
+      "fieldName": "description",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "complainDate",
+      "fieldType": "Instant"
+    },
+    {
+      "fieldName": "addedBy",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "assignee",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "resolutionComments",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "resolvedOn",
+      "fieldType": "Instant"
+    },
+    {
+      "fieldName": "resolvedBy",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "createdBy",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "createdDate",
+      "fieldType": "Instant"
+    },
+    {
+      "fieldName": "lastModifiedBy",
+      "fieldType": "String"
+    },
+    {
+      "fieldName": "lastModifiedDate",
+      "fieldType": "Instant"
+    },
+    {
+      "fieldName": "deletedOn",
+      "fieldType": "Instant"
+    }
+  ],
+  "microserviceName": "shaffafservice",
+  "name": "Complain",
+  "pagination": "pagination",
+  "relationships": [
+    {
+      "otherEntityName": "complainComment",
+      "relationshipName": "complainComments",
+      "relationshipSide": "left",
+      "relationshipType": "one-to-many"
+    }
+  ],
+  "searchEngine": "no",
+  "service": "serviceImpl"
+}
