@@ -55,4 +55,21 @@ public interface SellerService {
      * @param id the id of the entity.
      */
     void delete(Long id);
+
+    /**
+     * Get all the sellers using optimized native SQL query.
+     *
+     * @param searchTerm optional search term to filter results
+     * @param pageable the pagination information.
+     * @return the page of entities.
+     */
+    Page<SellerDTO> findAllOptimized(String searchTerm, Pageable pageable);
+
+    /**
+     * Save a seller using optimized processing.
+     *
+     * @param sellerDTO the entity to save.
+     * @return the persisted entity.
+     */
+    SellerDTO saveOptimized(SellerDTO sellerDTO);
 }

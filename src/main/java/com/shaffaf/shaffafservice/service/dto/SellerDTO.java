@@ -24,6 +24,7 @@ public class SellerDTO implements Serializable {
     private String email;
 
     @NotNull
+    @Pattern(regexp = "^\\+[0-9]{11,12}$", message = "Phone number must be in format +923311234569")
     private String phoneNumber;
 
     @NotNull

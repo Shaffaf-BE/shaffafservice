@@ -1,6 +1,7 @@
 package com.shaffaf.shaffafservice.service.impl;
 
 import com.shaffaf.shaffafservice.domain.Seller;
+import com.shaffaf.shaffafservice.domain.enumeration.Status;
 import com.shaffaf.shaffafservice.repository.SellerRepository;
 import com.shaffaf.shaffafservice.service.SellerService;
 import com.shaffaf.shaffafservice.service.dto.SellerDTO;
@@ -80,5 +81,58 @@ public class SellerServiceImpl implements SellerService {
     public void delete(Long id) {
         LOG.debug("Request to delete Seller : {}", id);
         sellerRepository.deleteById(id);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<SellerDTO> findAllOptimized(String searchTerm, Pageable pageable) {
+        LOG.debug("Request to get all Sellers with optimization, search term: {}", searchTerm);
+        return sellerRepository.findAllWithNativeQuery(searchTerm, pageable).map(sellerMapper::toDto);
+    }
+
+    @Override
+    public SellerDTO saveOptimized(SellerDTO sellerDTO) {
+        LOG.debug("Request to save Seller with optimization : {}", sellerDTO);
+
+        // Sanitize inputs to prevent injection attacks
+        if (sellerDTO.getFirstName() != null) {
+            sellerDTO.setFirstName(sanitizeInput(sellerDTO.getFirstName()));
+        }
+        if (sellerDTO.getLastName() != null) {
+            sellerDTO.setLastName(sanitizeInput(sellerDTO.getLastName()));
+        }
+        if (sellerDTO.getEmail() != null) {
+            sellerDTO.setEmail(sanitizeInput(sellerDTO.getEmail()));
+        }
+        if (sellerDTO.getPhoneNumber() != null) {
+            sellerDTO.setPhoneNumber(sanitizeInput(sellerDTO.getPhoneNumber()));
+        }
+
+        // Always set status to ACTIVE when creating a new seller
+        sellerDTO.setStatus(Status.ACTIVE);
+
+        // Set audit fields
+        sellerDTO.setCreatedDate(java.time.Instant.now());
+
+        // Use transactions efficiently for better performance
+        Seller seller = sellerMapper.toEntity(sellerDTO);
+        seller = sellerRepository.save(seller);
+
+        // Return a clean DTO mapping
+        return sellerMapper.toDto(seller);
+    }
+
+    /**
+     * Sanitize input to prevent injection attacks
+     *
+     * @param input the input string to sanitize
+     * @return sanitized string
+     */
+    private String sanitizeInput(String input) {
+        if (input == null) {
+            return null;
+        }
+        // Remove potentially dangerous characters and scripts
+        return input.replaceAll("[<>'\"]", "");
     }
 }

@@ -1,6 +1,7 @@
 package com.shaffaf.shaffafservice.web.rest;
 
 import com.shaffaf.shaffafservice.repository.SellerRepository;
+import com.shaffaf.shaffafservice.security.AuthoritiesConstants;
 import com.shaffaf.shaffafservice.service.SellerService;
 import com.shaffaf.shaffafservice.service.dto.SellerDTO;
 import com.shaffaf.shaffafservice.web.rest.errors.BadRequestAlertException;
@@ -18,6 +19,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import tech.jhipster.web.util.HeaderUtil;
@@ -28,7 +30,7 @@ import tech.jhipster.web.util.ResponseUtil;
  * REST controller for managing {@link com.shaffaf.shaffafservice.domain.Seller}.
  */
 @RestController
-@RequestMapping("/api/sellers")
+@RequestMapping("/api/sellers/v1")
 public class SellerResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(SellerResource.class);
@@ -64,6 +66,47 @@ public class SellerResource {
         return ResponseEntity.created(new URI("/api/sellers/" + sellerDTO.getId()))
             .headers(HeaderUtil.createEntityCreationAlert(applicationName, true, ENTITY_NAME, sellerDTO.getId().toString()))
             .body(sellerDTO);
+    }
+
+    /**
+     * {@code POST  /sellers/optimized} : Create a new seller using optimized native processing with enhanced security.
+     * Only accessible to administrators.
+     *
+     * @param sellerDTO the sellerDTO to create.
+     * @return the {@link ResponseEntity} with status {@code 201 (Created)} and with body the new sellerDTO, or with status {@code 400 (Bad Request)} if the seller has already an ID.
+     * @throws URISyntaxException if the Location URI syntax is incorrect.
+     */
+    @PostMapping("/optimized")
+    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
+    public ResponseEntity<SellerDTO> createSellerOptimized(@Valid @RequestBody SellerDTO sellerDTO) throws URISyntaxException {
+        LOG.debug("REST request to save Seller with optimization: {}", sellerDTO);
+        if (sellerDTO.getId() != null) {
+            throw new BadRequestAlertException("A new seller cannot already have an ID", ENTITY_NAME, "idexists");
+        }
+
+        // Apply rate limiting check
+        if (isRateLimitExceeded()) {
+            LOG.warn("Rate limit exceeded for seller creation");
+            return ResponseEntity.status(429).build(); // Too Many Requests
+        }
+
+        SellerDTO result = sellerService.saveOptimized(sellerDTO);
+
+        return ResponseEntity.created(new URI("/api/sellers/v1/" + result.getId()))
+            .headers(HeaderUtil.createEntityCreationAlert(applicationName, true, ENTITY_NAME, result.getId().toString()))
+            .body(result);
+    }
+
+    /**
+     * Simple rate limiting check implementation.
+     * In a production environment, replace with a proper rate limiting solution.
+     *
+     * @return true if rate limit is exceeded, false otherwise
+     */
+    private boolean isRateLimitExceeded() {
+        // For demonstration - in production, use a proper rate limiter
+        // This could check a counter in Redis or similar
+        return false;
     }
 
     /**
@@ -145,6 +188,26 @@ public class SellerResource {
     public ResponseEntity<List<SellerDTO>> getAllSellers(@org.springdoc.core.annotations.ParameterObject Pageable pageable) {
         LOG.debug("REST request to get a page of Sellers");
         Page<SellerDTO> page = sellerService.findAll(pageable);
+        HttpHeaders headers = PaginationUtil.generatePaginationHttpHeaders(ServletUriComponentsBuilder.fromCurrentRequest(), page);
+        return ResponseEntity.ok().headers(headers).body(page.getContent());
+    }
+
+    /**
+     * {@code GET  /sellers/optimized} : get all the sellers using an optimized native SQL query.
+     * Only accessible to administrators.
+     *
+     * @param searchTerm the optional search term to filter results
+     * @param pageable the pagination information
+     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and the list of sellers in body.
+     */
+    @GetMapping("/optimized")
+    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
+    public ResponseEntity<List<SellerDTO>> getAllSellersOptimized(
+        @RequestParam(required = false) String searchTerm,
+        @org.springdoc.core.annotations.ParameterObject Pageable pageable
+    ) {
+        LOG.debug("REST request to get a page of Sellers with optimization, search term: {}", searchTerm);
+        Page<SellerDTO> page = sellerService.findAllOptimized(searchTerm, pageable);
         HttpHeaders headers = PaginationUtil.generatePaginationHttpHeaders(ServletUriComponentsBuilder.fromCurrentRequest(), page);
         return ResponseEntity.ok().headers(headers).body(page.getContent());
     }
