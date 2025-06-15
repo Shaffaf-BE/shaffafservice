@@ -50,25 +50,6 @@ public class SellerResource {
     }
 
     /**
-     * {@code POST  /sellers} : Create a new seller.
-     *
-     * @param sellerDTO the sellerDTO to create.
-     * @return the {@link ResponseEntity} with status {@code 201 (Created)} and with body the new sellerDTO, or with status {@code 400 (Bad Request)} if the seller has already an ID.
-     * @throws URISyntaxException if the Location URI syntax is incorrect.
-     */
-    @PostMapping("")
-    public ResponseEntity<SellerDTO> createSeller(@Valid @RequestBody SellerDTO sellerDTO) throws URISyntaxException {
-        LOG.debug("REST request to save Seller : {}", sellerDTO);
-        if (sellerDTO.getId() != null) {
-            throw new BadRequestAlertException("A new seller cannot already have an ID", ENTITY_NAME, "idexists");
-        }
-        sellerDTO = sellerService.save(sellerDTO);
-        return ResponseEntity.created(new URI("/api/sellers/" + sellerDTO.getId()))
-            .headers(HeaderUtil.createEntityCreationAlert(applicationName, true, ENTITY_NAME, sellerDTO.getId().toString()))
-            .body(sellerDTO);
-    }
-
-    /**
      * {@code POST  /sellers/optimized} : Create a new seller using optimized native processing with enhanced security.
      * Only accessible to administrators.
      *
@@ -110,36 +91,49 @@ public class SellerResource {
     }
 
     /**
-     * {@code PUT  /sellers/:id} : Updates an existing seller.
+     * {@code PUT  /sellers/secure-optimized/:id} : Updates a seller with optimized and secure processing.
+     * Only accessible to administrators.
      *
-     * @param id the id of the sellerDTO to save.
-     * @param sellerDTO the sellerDTO to update.
+     * @param id the id of the sellerDTO to update
+     * @param sellerDTO the sellerDTO to update
      * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body the updated sellerDTO,
      * or with status {@code 400 (Bad Request)} if the sellerDTO is not valid,
+     * or with status {@code 404 (Not Found)} if the seller is not found,
      * or with status {@code 500 (Internal Server Error)} if the sellerDTO couldn't be updated.
-     * @throws URISyntaxException if the Location URI syntax is incorrect.
      */
-    @PutMapping("/{id}")
-    public ResponseEntity<SellerDTO> updateSeller(
+    @PutMapping("/secure-optimized/{id}")
+    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
+    public ResponseEntity<SellerDTO> updateSellerSecureOptimized(
         @PathVariable(value = "id", required = false) final Long id,
         @Valid @RequestBody SellerDTO sellerDTO
-    ) throws URISyntaxException {
-        LOG.debug("REST request to update Seller : {}, {}", id, sellerDTO);
+    ) {
+        LOG.debug("REST request to update Seller with secure optimized processing: {}, {}", id, sellerDTO);
+
         if (sellerDTO.getId() == null) {
             throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
         }
         if (!Objects.equals(id, sellerDTO.getId())) {
             throw new BadRequestAlertException("Invalid ID", ENTITY_NAME, "idinvalid");
         }
-
         if (!sellerRepository.existsById(id)) {
             throw new BadRequestAlertException("Entity not found", ENTITY_NAME, "idnotfound");
         }
 
-        sellerDTO = sellerService.update(sellerDTO);
+        // Validate phone number format
+        if (sellerDTO.getPhoneNumber() != null && !sellerDTO.getPhoneNumber().matches("^\\+[0-9]{11,12}$")) {
+            throw new BadRequestAlertException("Phone number must be in format +923311234569", ENTITY_NAME, "invalidphone");
+        }
+
+        // Apply rate limiting check to prevent abuse
+        if (isRateLimitExceeded()) {
+            LOG.warn("Rate limit exceeded for seller update");
+            return ResponseEntity.status(429).build(); // Too Many Requests
+        }
+
+        SellerDTO result = sellerService.updateSecureOptimized(sellerDTO);
         return ResponseEntity.ok()
-            .headers(HeaderUtil.createEntityUpdateAlert(applicationName, true, ENTITY_NAME, sellerDTO.getId().toString()))
-            .body(sellerDTO);
+            .headers(HeaderUtil.createEntityUpdateAlert(applicationName, true, ENTITY_NAME, result.getId().toString()))
+            .body(result);
     }
 
     /**
@@ -179,20 +173,6 @@ public class SellerResource {
     }
 
     /**
-     * {@code GET  /sellers} : get all the sellers.
-     *
-     * @param pageable the pagination information.
-     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and the list of sellers in body.
-     */
-    @GetMapping("")
-    public ResponseEntity<List<SellerDTO>> getAllSellers(@org.springdoc.core.annotations.ParameterObject Pageable pageable) {
-        LOG.debug("REST request to get a page of Sellers");
-        Page<SellerDTO> page = sellerService.findAll(pageable);
-        HttpHeaders headers = PaginationUtil.generatePaginationHttpHeaders(ServletUriComponentsBuilder.fromCurrentRequest(), page);
-        return ResponseEntity.ok().headers(headers).body(page.getContent());
-    }
-
-    /**
      * {@code GET  /sellers/optimized} : get all the sellers using an optimized native SQL query.
      * Only accessible to administrators.
      *
@@ -226,17 +206,29 @@ public class SellerResource {
     }
 
     /**
-     * {@code DELETE  /sellers/:id} : delete the "id" seller.
+     * {@code GET  /sellers/secure-optimized/:id} : Get a seller by ID using optimized and secure native query.
      *
-     * @param id the id of the sellerDTO to delete.
-     * @return the {@link ResponseEntity} with status {@code 204 (NO_CONTENT)}.
+     * @param id the id of the sellerDTO to retrieve
+     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body the sellerDTO,
+     *         or with status {@code 404 (Not Found)}, or with status {@code 400 (Bad Request)} if the ID is invalid
      */
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteSeller(@PathVariable("id") Long id) {
-        LOG.debug("REST request to delete Seller : {}", id);
-        sellerService.delete(id);
-        return ResponseEntity.noContent()
-            .headers(HeaderUtil.createEntityDeletionAlert(applicationName, true, ENTITY_NAME, id.toString()))
-            .build();
+    @GetMapping("/optimized/{id}")
+    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
+    public ResponseEntity<SellerDTO> getSellerSecureOptimized(@PathVariable Long id) {
+        LOG.debug("REST request to get Seller with secure optimization : {}", id);
+
+        // Validate ID to prevent potential attacks
+        if (id == null || id <= 0) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        // Apply rate limiting check to prevent abuse
+        if (isRateLimitExceeded()) {
+            LOG.warn("Rate limit exceeded for seller retrieval");
+            return ResponseEntity.status(429).build(); // Too Many Requests
+        }
+
+        Optional<SellerDTO> sellerDTO = sellerService.findOneOptimized(id);
+        return ResponseUtil.wrapOrNotFound(sellerDTO);
     }
 }

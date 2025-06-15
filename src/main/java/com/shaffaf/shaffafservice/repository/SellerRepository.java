@@ -1,6 +1,7 @@
 package com.shaffaf.shaffafservice.repository;
 
 import com.shaffaf.shaffafservice.domain.Seller;
+import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.*;
@@ -37,4 +38,14 @@ public interface SellerRepository extends JpaRepository<Seller, Long> {
         nativeQuery = true
     )
     Page<Seller> findAllWithNativeQuery(@Param("searchTerm") String searchTerm, Pageable pageable);
+
+    /**
+     * Find a seller by ID using a secure and optimized native SQL query.
+     * This query ensures that only non-deleted sellers are returned.
+     *
+     * @param id the ID of the seller to retrieve
+     * @return An Optional containing the Seller entity, or empty if not found
+     */
+    @Query(value = "SELECT s.* FROM seller s " + "WHERE s.id = :id " + "AND s.deleted_on IS NULL", nativeQuery = true)
+    Optional<Seller> findByIdOptimized(@Param("id") Long id);
 }

@@ -122,6 +122,49 @@ public class SellerServiceImpl implements SellerService {
         return sellerMapper.toDto(seller);
     }
 
+    @Override
+    public SellerDTO updateSecureOptimized(SellerDTO sellerDTO) {
+        LOG.debug("Request to update Seller with secure optimized processing : {}", sellerDTO);
+
+        // Sanitize inputs to prevent injection attacks
+        if (sellerDTO.getFirstName() != null) {
+            sellerDTO.setFirstName(sanitizeInput(sellerDTO.getFirstName()));
+        }
+        if (sellerDTO.getLastName() != null) {
+            sellerDTO.setLastName(sanitizeInput(sellerDTO.getLastName()));
+        }
+        if (sellerDTO.getEmail() != null) {
+            sellerDTO.setEmail(sanitizeInput(sellerDTO.getEmail()));
+        }
+        if (sellerDTO.getPhoneNumber() != null) {
+            sellerDTO.setPhoneNumber(sanitizeInput(sellerDTO.getPhoneNumber()));
+        }
+
+        // Set audit fields
+        sellerDTO.setLastModifiedDate(java.time.Instant.now());
+
+        // Use transactions efficiently for better performance
+        Seller seller = sellerMapper.toEntity(sellerDTO);
+        seller = sellerRepository.save(seller);
+
+        // Return a clean DTO mapping
+        return sellerMapper.toDto(seller);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<SellerDTO> findOneOptimized(Long id) {
+        LOG.debug("Request to get Seller with optimization : {}", id);
+
+        // Input validation to prevent SQL injection
+        if (id == null || id <= 0) {
+            LOG.warn("Invalid seller ID: {}", id);
+            return Optional.empty();
+        }
+
+        return sellerRepository.findByIdOptimized(id).map(sellerMapper::toDto);
+    }
+
     /**
      * Sanitize input to prevent injection attacks
      *

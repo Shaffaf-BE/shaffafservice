@@ -72,4 +72,20 @@ public interface SellerService {
      * @return the persisted entity.
      */
     SellerDTO saveOptimized(SellerDTO sellerDTO);
+
+    /**
+     * Updates a seller with optimized and secure processing.
+     *
+     * @param sellerDTO the entity to update
+     * @return the updated entity
+     */
+    SellerDTO updateSecureOptimized(SellerDTO sellerDTO);
+
+    /**
+     * Get the "id" seller using optimized and secure native query.
+     *
+     * @param id the id of the entity
+     * @return the entity
+     */
+    Optional<SellerDTO> findOneOptimized(Long id);
 }
