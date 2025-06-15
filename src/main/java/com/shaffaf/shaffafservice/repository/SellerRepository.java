@@ -1,6 +1,8 @@
 package com.shaffaf.shaffafservice.repository;
 
 import com.shaffaf.shaffafservice.domain.Seller;
+import com.shaffaf.shaffafservice.domain.enumeration.Status;
+import java.time.Instant;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -48,4 +50,70 @@ public interface SellerRepository extends JpaRepository<Seller, Long> {
      */
     @Query(value = "SELECT s.* FROM seller s " + "WHERE s.id = :id " + "AND s.deleted_on IS NULL", nativeQuery = true)
     Optional<Seller> findByIdOptimized(@Param("id") Long id);
+
+    /**
+     * Save a seller entity using native SQL query with PostgreSQL's sequence.
+     * This approach is thread-safe and handles high concurrency properly.
+     *
+     * @param firstName the first name of the seller
+     * @param lastName the last name of the seller
+     * @param email the email of the seller
+     * @param phoneNumber the phone number of the seller
+     * @param status the status of the seller
+     * @param createdBy who created the seller
+     * @param createdDate when the seller was created
+     * @return The ID of the newly created seller
+     */
+    @Query(
+        value = "INSERT INTO seller (id, first_name, last_name, email, phone_number, status, created_by, created_date) " +
+        "VALUES (nextval('sequence_generator'), :firstName, :lastName, :email, :phoneNumber, :status, :createdBy, :createdDate) " +
+        "RETURNING id",
+        nativeQuery = true
+    )
+    Long saveWithNativeQueryReturningId(
+        @Param("firstName") String firstName,
+        @Param("lastName") String lastName,
+        @Param("email") String email,
+        @Param("phoneNumber") String phoneNumber,
+        @Param("status") String status,
+        @Param("createdBy") String createdBy,
+        @Param("createdDate") Instant createdDate
+    );
+
+    /**
+     * Update a seller entity using native SQL query.
+     *
+     * @param id the ID of the seller to update
+     * @param firstName the first name of the seller
+     * @param lastName the last name of the seller
+     * @param email the email of the seller
+     * @param phoneNumber the phone number of the seller
+     * @param status the status of the seller
+     * @param lastModifiedBy who last modified the seller
+     * @param lastModifiedDate when the seller was last modified
+     * @return The number of rows affected (should be 1)
+     */
+    @Modifying
+    @Query(
+        value = "UPDATE seller " +
+        "SET first_name = :firstName, " +
+        "    last_name = :lastName, " +
+        "    email = :email, " +
+        "    phone_number = :phoneNumber, " +
+        "    status = :status, " +
+        "    last_modified_by = :lastModifiedBy, " +
+        "    last_modified_date = :lastModifiedDate " +
+        "WHERE id = :id AND deleted_on IS NULL",
+        nativeQuery = true
+    )
+    int updateWithNativeQuery(
+        @Param("id") Long id,
+        @Param("firstName") String firstName,
+        @Param("lastName") String lastName,
+        @Param("email") String email,
+        @Param("phoneNumber") String phoneNumber,
+        @Param("status") String status,
+        @Param("lastModifiedBy") String lastModifiedBy,
+        @Param("lastModifiedDate") Instant lastModifiedDate
+    );
 }

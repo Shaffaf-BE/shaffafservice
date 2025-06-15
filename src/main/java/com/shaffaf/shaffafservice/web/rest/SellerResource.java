@@ -50,35 +50,6 @@ public class SellerResource {
     }
 
     /**
-     * {@code POST  /sellers/optimized} : Create a new seller using optimized native processing with enhanced security.
-     * Only accessible to administrators.
-     *
-     * @param sellerDTO the sellerDTO to create.
-     * @return the {@link ResponseEntity} with status {@code 201 (Created)} and with body the new sellerDTO, or with status {@code 400 (Bad Request)} if the seller has already an ID.
-     * @throws URISyntaxException if the Location URI syntax is incorrect.
-     */
-    @PostMapping("/optimized")
-    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
-    public ResponseEntity<SellerDTO> createSellerOptimized(@Valid @RequestBody SellerDTO sellerDTO) throws URISyntaxException {
-        LOG.debug("REST request to save Seller with optimization: {}", sellerDTO);
-        if (sellerDTO.getId() != null) {
-            throw new BadRequestAlertException("A new seller cannot already have an ID", ENTITY_NAME, "idexists");
-        }
-
-        // Apply rate limiting check
-        if (isRateLimitExceeded()) {
-            LOG.warn("Rate limit exceeded for seller creation");
-            return ResponseEntity.status(429).build(); // Too Many Requests
-        }
-
-        SellerDTO result = sellerService.saveOptimized(sellerDTO);
-
-        return ResponseEntity.created(new URI("/api/sellers/v1/" + result.getId()))
-            .headers(HeaderUtil.createEntityCreationAlert(applicationName, true, ENTITY_NAME, result.getId().toString()))
-            .body(result);
-    }
-
-    /**
      * Simple rate limiting check implementation.
      * In a production environment, replace with a proper rate limiting solution.
      *
@@ -88,52 +59,6 @@ public class SellerResource {
         // For demonstration - in production, use a proper rate limiter
         // This could check a counter in Redis or similar
         return false;
-    }
-
-    /**
-     * {@code PUT  /sellers/secure-optimized/:id} : Updates a seller with optimized and secure processing.
-     * Only accessible to administrators.
-     *
-     * @param id the id of the sellerDTO to update
-     * @param sellerDTO the sellerDTO to update
-     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body the updated sellerDTO,
-     * or with status {@code 400 (Bad Request)} if the sellerDTO is not valid,
-     * or with status {@code 404 (Not Found)} if the seller is not found,
-     * or with status {@code 500 (Internal Server Error)} if the sellerDTO couldn't be updated.
-     */
-    @PutMapping("/secure-optimized/{id}")
-    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
-    public ResponseEntity<SellerDTO> updateSellerSecureOptimized(
-        @PathVariable(value = "id", required = false) final Long id,
-        @Valid @RequestBody SellerDTO sellerDTO
-    ) {
-        LOG.debug("REST request to update Seller with secure optimized processing: {}, {}", id, sellerDTO);
-
-        if (sellerDTO.getId() == null) {
-            throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
-        }
-        if (!Objects.equals(id, sellerDTO.getId())) {
-            throw new BadRequestAlertException("Invalid ID", ENTITY_NAME, "idinvalid");
-        }
-        if (!sellerRepository.existsById(id)) {
-            throw new BadRequestAlertException("Entity not found", ENTITY_NAME, "idnotfound");
-        }
-
-        // Validate phone number format
-        if (sellerDTO.getPhoneNumber() != null && !sellerDTO.getPhoneNumber().matches("^\\+[0-9]{11,12}$")) {
-            throw new BadRequestAlertException("Phone number must be in format +923311234569", ENTITY_NAME, "invalidphone");
-        }
-
-        // Apply rate limiting check to prevent abuse
-        if (isRateLimitExceeded()) {
-            LOG.warn("Rate limit exceeded for seller update");
-            return ResponseEntity.status(429).build(); // Too Many Requests
-        }
-
-        SellerDTO result = sellerService.updateSecureOptimized(sellerDTO);
-        return ResponseEntity.ok()
-            .headers(HeaderUtil.createEntityUpdateAlert(applicationName, true, ENTITY_NAME, result.getId().toString()))
-            .body(result);
     }
 
     /**
@@ -180,7 +105,7 @@ public class SellerResource {
      * @param pageable the pagination information
      * @return the {@link ResponseEntity} with status {@code 200 (OK)} and the list of sellers in body.
      */
-    @GetMapping("/optimized")
+    @GetMapping("/get-many-sellers")
     @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
     public ResponseEntity<List<SellerDTO>> getAllSellersOptimized(
         @RequestParam(required = false) String searchTerm,
@@ -193,26 +118,13 @@ public class SellerResource {
     }
 
     /**
-     * {@code GET  /sellers/:id} : get the "id" seller.
-     *
-     * @param id the id of the sellerDTO to retrieve.
-     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body the sellerDTO, or with status {@code 404 (Not Found)}.
-     */
-    @GetMapping("/{id}")
-    public ResponseEntity<SellerDTO> getSeller(@PathVariable("id") Long id) {
-        LOG.debug("REST request to get Seller : {}", id);
-        Optional<SellerDTO> sellerDTO = sellerService.findOne(id);
-        return ResponseUtil.wrapOrNotFound(sellerDTO);
-    }
-
-    /**
      * {@code GET  /sellers/secure-optimized/:id} : Get a seller by ID using optimized and secure native query.
      *
      * @param id the id of the sellerDTO to retrieve
      * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body the sellerDTO,
      *         or with status {@code 404 (Not Found)}, or with status {@code 400 (Bad Request)} if the ID is invalid
      */
-    @GetMapping("/optimized/{id}")
+    @GetMapping("/get-seller/{id}")
     @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
     public ResponseEntity<SellerDTO> getSellerSecureOptimized(@PathVariable Long id) {
         LOG.debug("REST request to get Seller with secure optimization : {}", id);
@@ -230,5 +142,79 @@ public class SellerResource {
 
         Optional<SellerDTO> sellerDTO = sellerService.findOneOptimized(id);
         return ResponseUtil.wrapOrNotFound(sellerDTO);
+    }
+
+    /**
+     * {@code POST  /native} : Create a new seller using native SQL query.
+     *
+     * @param sellerDTO the sellerDTO to create
+     * @return the {@link ResponseEntity} with status {@code 201 (Created)} and with body the new sellerDTO,
+     *         or with status {@code 400 (Bad Request)} if the seller has already an ID
+     * @throws URISyntaxException if the Location URI syntax is incorrect
+     */
+    @PostMapping("/create-seller")
+    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
+    public ResponseEntity<SellerDTO> createSellerNative(@Valid @RequestBody SellerDTO sellerDTO) throws URISyntaxException {
+        LOG.debug("REST request to save Seller with native query: {}", sellerDTO);
+        if (sellerDTO.getId() != null) {
+            throw new BadRequestAlertException("A new seller cannot already have an ID", ENTITY_NAME, "idexists");
+        }
+
+        // Validate phone number format
+        if (sellerDTO.getPhoneNumber() != null && !sellerDTO.getPhoneNumber().matches("^\\+[0-9]{11,12}$")) {
+            throw new BadRequestAlertException("Phone number must be in format +923311234569", ENTITY_NAME, "invalidphone");
+        }
+
+        // Apply rate limiting check
+        if (isRateLimitExceeded()) {
+            LOG.warn("Rate limit exceeded for seller creation");
+            return ResponseEntity.status(429).build(); // Too Many Requests
+        }
+
+        SellerDTO result = sellerService.saveWithNativeQuery(sellerDTO);
+
+        return ResponseEntity.created(new URI("/api/sellers/v1/" + result.getId()))
+            .headers(HeaderUtil.createEntityCreationAlert(applicationName, true, ENTITY_NAME, result.getId().toString()))
+            .body(result);
+    }
+
+    /**
+     * {@code PUT  /native/:id} : Updates an existing seller using native SQL query.
+     *
+     * @param sellerDTO the sellerDTO to update
+     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body the updated sellerDTO,
+     *         or with status {@code 400 (Bad Request)} if the sellerDTO is not valid,
+     *         or with status {@code 500 (Internal Server Error)} if the sellerDTO couldn't be updated
+     */
+    @PutMapping("/update-seller")
+    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
+    public ResponseEntity<SellerDTO> updateSellerNative(@Valid @RequestBody SellerDTO sellerDTO) {
+        LOG.debug("REST request to update Seller with native query: {}, {}", sellerDTO.getId(), sellerDTO);
+        Long id = sellerDTO.getId();
+        if (sellerDTO.getId() == null) {
+            throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
+        }
+        if (!Objects.equals(id, sellerDTO.getId())) {
+            throw new BadRequestAlertException("Invalid ID", ENTITY_NAME, "idinvalid");
+        }
+        if (!sellerRepository.existsById(id)) {
+            throw new BadRequestAlertException("Entity not found", ENTITY_NAME, "idnotfound");
+        }
+
+        // Validate phone number format
+        if (sellerDTO.getPhoneNumber() != null && !sellerDTO.getPhoneNumber().matches("^\\+[0-9]{11,12}$")) {
+            throw new BadRequestAlertException("Phone number must be in format +923311234569", ENTITY_NAME, "invalidphone");
+        }
+
+        // Apply rate limiting check to prevent abuse
+        if (isRateLimitExceeded()) {
+            LOG.warn("Rate limit exceeded for seller update");
+            return ResponseEntity.status(429).build(); // Too Many Requests
+        }
+
+        SellerDTO result = sellerService.updateWithNativeQuery(sellerDTO);
+        return ResponseEntity.ok()
+            .headers(HeaderUtil.createEntityUpdateAlert(applicationName, true, ENTITY_NAME, result.getId().toString()))
+            .body(result);
     }
 }
