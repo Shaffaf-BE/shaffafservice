@@ -380,4 +380,130 @@ public class ProjectResource {
         // In production, use a distributed rate limiter with Redis or similar
         return false;
     }
+
+    /**
+     * {@code PUT  /projects/secure/update-by-seller} : Update an existing project using native queries for better performance.
+     * This endpoint is specifically designed for sellers to update their own projects.
+     * Uses enhanced security, input validation and rate limiting.
+     * Only the seller who created the project or an admin can update it.
+     * The project ID must be provided in the request body, not in the URL.
+     *
+     * @param projectDTO the projectDTO to update (must include the project ID in the request body)
+     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body the updated projectDTO,
+     *         or with status {@code 400 (Bad Request)} if the project has validation errors or ID is missing,
+     *         or with status {@code 401 (Unauthorized)} if seller is not found,
+     *         or with status {@code 403 (Forbidden)} if seller is not the owner of the project,
+     *         or with status {@code 404 (Not Found)} if project is not found,
+     *         or with status {@code 429 (Too Many Requests)} if rate limit is exceeded
+     * @throws URISyntaxException if the Location URI syntax is incorrect
+     */
+    @PutMapping("/secure/update-by-seller")
+    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.SELLER + "\") or hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
+    public ResponseEntity<ProjectDTO> updateProjectSecure(@Valid @RequestBody ProjectDTO projectDTO) throws URISyntaxException {
+        LOG.debug("REST request to securely update Project by seller: {}", projectDTO);
+
+        // Validate that the project ID is provided in the request body
+        if (projectDTO.getId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Project ID is required in the request body to update a project");
+        }
+
+        Long projectId = projectDTO.getId();
+
+        // Get current authenticated username (mobile number) for seller identification
+        String currentUsername = SecurityUtils.getCurrentUserLogin()
+            .orElseThrow(() ->
+                new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Current user not found. Please ensure you are properly authenticated."
+                )
+            );
+
+        LOG.debug("Attempting to validate authenticated user: {}", currentUsername);
+
+        // Normalize the phone number to handle various formats (local, international, etc.)
+        String normalizedPhone = PhoneNumberUtil.normalize(currentUsername);
+        LOG.debug("Original username: '{}', Normalized phone: '{}'", currentUsername, normalizedPhone);
+        LOG.debug("Phone number validation result: {}", PhoneNumberUtil.isValidPakistaniMobile(normalizedPhone));
+
+        // Validate mobile number format for security
+        if (!PhoneNumberUtil.isValidPakistaniMobile(normalizedPhone)) {
+            String errorMessage = String.format(
+                "Only a Seller with valid mobile number can update a Project. " +
+                "Authentication failed - invalid phone number format. Expected format: %s, but received: %s. " +
+                "Please ensure your seller account is registered with a valid Pakistani mobile number.",
+                PhoneNumberUtil.EXAMPLE_PHONE_NUMBER,
+                currentUsername
+            );
+            LOG.warn("Phone validation failed for user: '{}' (normalized: '{}')", currentUsername, normalizedPhone);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, errorMessage);
+        }
+
+        // Find seller by mobile number (using normalized phone number)
+        Optional<Seller> sellerOptional = sellerRepository.findByPhoneNumber(normalizedPhone);
+        if (sellerOptional.isEmpty()) {
+            String errorMessage = String.format(
+                "Only a Seller with valid mobile number can update a Project. " +
+                "No seller account found for mobile number: %s (normalized from: %s). " +
+                "Please ensure your seller account is active and registered with this mobile number.",
+                normalizedPhone,
+                currentUsername
+            );
+            LOG.warn("Seller not found for mobile number: {} (normalized from: {})", normalizedPhone, currentUsername);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, errorMessage);
+        }
+
+        Seller authenticatedSeller = sellerOptional.get();
+
+        // Check if the project exists and get its current details
+        Optional<ProjectDTO> existingProjectOptional = projectService.findOne(projectId);
+        if (existingProjectOptional.isEmpty()) {
+            LOG.warn("Project not found with ID: {}", projectId);
+            throw new ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "Project not found with ID: " + projectId + ". Please verify the project ID and try again."
+            );
+        }
+
+        ProjectDTO existingProject = existingProjectOptional.get();
+
+        // Check if the authenticated seller is the owner of the project or if user is admin
+        boolean isAdmin = SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.ADMIN);
+        boolean isProjectOwner =
+            existingProject.getSeller() != null && Objects.equals(existingProject.getSeller().getId(), authenticatedSeller.getId());
+
+        if (!isAdmin && !isProjectOwner) {
+            LOG.warn("Seller {} attempted to update project {} which they don't own", normalizedPhone, projectId);
+            throw new ResponseStatusException(
+                HttpStatus.FORBIDDEN,
+                "Access denied. Only the seller who created this project or an admin can update it. " +
+                "This project belongs to a different seller."
+            );
+        }
+
+        // Set the seller in the project DTO (maintain original seller)
+        projectDTO.setSeller(existingProject.getSeller());
+
+        // Sanitize and validate input fields to prevent injection attacks
+        sanitizeProjectInputs(projectDTO);
+
+        // Apply rate limiting to prevent abuse
+        if (isRateLimitExceeded()) {
+            LOG.warn("Rate limit exceeded for project update by seller: {} (normalized: {})", currentUsername, normalizedPhone);
+            return ResponseEntity.status(429).build(); // Too Many Requests
+        }
+
+        // Update project using optimized native query
+        ProjectDTO result = projectService.updateProjectNative(projectDTO, normalizedPhone);
+
+        LOG.info(
+            "Project updated successfully by seller: {} (normalized: {}) with ID: {}",
+            currentUsername,
+            normalizedPhone,
+            result.getId()
+        );
+
+        return ResponseEntity.ok()
+            .headers(HeaderUtil.createEntityUpdateAlert(applicationName, true, ENTITY_NAME, result.getId().toString()))
+            .body(result);
+    }
 }

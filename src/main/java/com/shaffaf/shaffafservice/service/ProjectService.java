@@ -66,4 +66,16 @@ public interface ProjectService {
      * @throws IllegalArgumentException if validation fails
      */
     ProjectDTO createProjectNative(ProjectDTO projectDTO, String username);
+
+    /**
+     * Update an existing project using native SQL for better performance and security.
+     * This method is specifically designed for sellers to update their own projects.
+     * Only the seller who created the project or an admin can update it.
+     *
+     * @param projectDTO the project to update, with seller information and project ID
+     * @param username the username of the currently authenticated user
+     * @return the updated ProjectDTO
+     * @throws IllegalArgumentException if validation fails
+     */
+    ProjectDTO updateProjectNative(ProjectDTO projectDTO, String username);
 }

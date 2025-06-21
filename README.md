@@ -6,6 +6,105 @@ This is a "microservice" application intended to be part of a microservice archi
 
 This application is configured for Service Discovery and Configuration with Consul. On launch, it will refuse to start if it is not able to connect to Consul at [http://localhost:8500](http://localhost:8500). For more information, read our documentation on [Service Discovery and Configuration with Consul][].
 
+## Shaffaf Property Management Platform
+
+The Shaffaf service is a secure property management platform designed for the Pakistani real estate market. It provides comprehensive APIs for managing real estate projects with enhanced security features.
+
+### Secure Project Management APIs
+
+The platform includes secure, high-performance APIs for project management with the following key features:
+
+#### 🔐 Security Features
+
+- **Pakistani Mobile Number Validation**: All operations require valid Pakistani mobile numbers for seller identification
+- **Role-Based Access Control**: Sellers can only manage their own projects; Admins have full access
+- **Native PostgreSQL Queries**: Uses optimized native SQL for better performance and security
+- **Input Sanitization**: Comprehensive XSS and injection attack prevention
+- **Rate Limiting**: Built-in rate limiting framework (production-ready with Redis integration)
+
+#### 📋 Available Secure Endpoints
+
+##### 1. Create Project (Secure)
+
+**Endpoint**: `POST /api/projects/v1/secure/create-by-seller`
+
+- **Authentication**: Requires SELLER or ADMIN role
+- **Security**: Seller automatically identified by authenticated mobile number
+- **Validation**: Full input sanitization and Pakistani phone number validation
+- **Performance**: Uses native PostgreSQL insert queries
+
+##### 2. Update Project (Secure)
+
+**Endpoint**: `PUT /api/projects/v1/secure/update-by-seller`
+
+- **Authentication**: Requires SELLER or ADMIN role
+- **Authorization**: Only project owner or admin can update
+- **Request**: Project ID must be in request body (not URL parameter)
+- **Security**: Ownership verification through mobile number validation
+- **Performance**: Uses native PostgreSQL update queries
+
+#### 🛡️ Security Validation Flow
+
+1. **Authentication Check**: Verify user is properly authenticated
+2. **Mobile Number Validation**: Validate Pakistani mobile number format (+92-XXX-XXXXXXX)
+3. **Seller Verification**: Confirm seller exists and is active
+4. **Project Ownership**: Verify seller owns the project (for updates)
+5. **Input Sanitization**: Prevent XSS and injection attacks
+6. **Rate Limiting**: Prevent API abuse
+7. **Native Query Execution**: Secure database operations
+
+#### 📝 Request/Response Examples
+
+**Create Project Request**:
+
+```json
+{
+  "name": "Green Valley Residency",
+  "description": "Modern residential project in Lahore",
+  "startDate": "2025-07-01",
+  "endDate": "2027-06-30",
+  "status": "ACTIVE",
+  "feesPerUnitPerMonth": 25000.0,
+  "unionHeadName": "Ahmed Ali",
+  "unionHeadMobileNumber": "+92-300-1234567",
+  "numberOfUnits": 100
+}
+```
+
+**Update Project Request**:
+
+```json
+{
+  "id": 123,
+  "name": "Green Valley Residency - Phase 2",
+  "description": "Updated description with Phase 2 details",
+  "startDate": "2025-07-01",
+  "endDate": "2028-06-30",
+  "status": "ACTIVE",
+  "feesPerUnitPerMonth": 28000.0,
+  "unionHeadName": "Ahmed Ali",
+  "unionHeadMobileNumber": "+92-300-1234567",
+  "numberOfUnits": 150
+}
+```
+
+#### 🚨 Error Handling
+
+- **400 Bad Request**: Invalid input, missing required fields, validation failures
+- **401 Unauthorized**: Authentication required or invalid credentials
+- **403 Forbidden**: Insufficient permissions (not project owner and not admin)
+- **404 Not Found**: Project not found
+- **429 Too Many Requests**: Rate limit exceeded
+
+#### 🏗️ Technical Implementation
+
+- **Backend Framework**: Spring Boot with Spring Security
+- **Database**: PostgreSQL with native queries
+- **Validation**: Jakarta Validation with custom Pakistani mobile number validation
+- **Security**: JWT-based authentication with role-based access control
+- **Performance**: Native SQL queries for optimal database performance
+- **Error Handling**: Comprehensive error responses with user-friendly messages
+
 ## Project Structure
 
 Node is required for generation and recommended for development. `package.json` is always generated for a better development experience with prettier, commit hooks, scripts and so on.

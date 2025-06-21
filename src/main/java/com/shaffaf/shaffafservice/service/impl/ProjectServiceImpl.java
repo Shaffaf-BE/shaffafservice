@@ -149,4 +149,92 @@ public class ProjectServiceImpl implements ProjectService {
             .map(projectMapper::toDto)
             .orElseThrow(() -> new BadRequestAlertException("Error creating project", "project", "creationfailed"));
     }
+
+    @Override
+    @Transactional
+    public ProjectDTO updateProjectNative(ProjectDTO projectDTO, String username) {
+        LOG.debug("Request to update Project using native query : {}", projectDTO);
+
+        // Validate input
+        if (projectDTO.getId() == null) {
+            throw new BadRequestAlertException("Project ID is required for update", "project", "idnull");
+        }
+
+        if (projectDTO.getSeller() == null || projectDTO.getSeller().getId() == null) {
+            throw new BadRequestAlertException("A seller is required to update a project", "project", "sellerrequired");
+        }
+
+        // Verify that the project exists
+        Long projectId = projectDTO.getId();
+        if (!projectRepository.existsById(projectId)) {
+            throw new BadRequestAlertException("Project not found", "project", "projectnotfound");
+        }
+
+        // Verify that the seller exists
+        Long sellerId = projectDTO.getSeller().getId();
+        if (!projectRepository.existsSeller(sellerId)) {
+            throw new BadRequestAlertException("Seller not found", "project", "sellernotfound");
+        }
+
+        // Additional validation for required fields
+        if (projectDTO.getName() == null || projectDTO.getName().trim().isEmpty()) {
+            throw new BadRequestAlertException("Project name is required", "project", "namerequired");
+        }
+
+        if (projectDTO.getUnionHeadName() == null || projectDTO.getUnionHeadName().trim().isEmpty()) {
+            throw new BadRequestAlertException("Union head name is required", "project", "unionheadnamerequired");
+        }
+
+        if (projectDTO.getUnionHeadMobileNumber() == null || projectDTO.getUnionHeadMobileNumber().trim().isEmpty()) {
+            throw new BadRequestAlertException("Union head mobile number is required", "project", "unionheadmobilenumberrequired");
+        }
+
+        if (projectDTO.getNumberOfUnits() == null || projectDTO.getNumberOfUnits() <= 0) {
+            throw new BadRequestAlertException("Number of units must be greater than zero", "project", "numberofunitsrequired");
+        }
+
+        // Set default status if not provided
+        String status = projectDTO.getStatus() != null ? projectDTO.getStatus().toString() : Status.ACTIVE.toString();
+
+        // Execute secure native update query with enhanced validation
+        try {
+            int rowsAffected = projectRepository.updateProjectNative(
+                projectId,
+                projectDTO.getName(),
+                projectDTO.getDescription(),
+                projectDTO.getStartDate(),
+                projectDTO.getEndDate(),
+                status,
+                projectDTO.getFeesPerUnitPerMonth(),
+                projectDTO.getUnionHeadName(),
+                projectDTO.getUnionHeadMobileNumber(),
+                projectDTO.getNumberOfUnits(),
+                username
+            );
+
+            if (rowsAffected == 0) {
+                throw new BadRequestAlertException(
+                    "Failed to update project. Project may not exist or validation failed.",
+                    "project",
+                    "updatefailed"
+                );
+            }
+
+            // Retrieve the updated project for the response
+            return projectRepository
+                .findById(projectId)
+                .map(projectMapper::toDto)
+                .orElseThrow(() -> new BadRequestAlertException("Error retrieving updated project", "project", "retrievalfailed"));
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            LOG.error("Data integrity violation while updating project: {}", e.getMessage());
+            throw new BadRequestAlertException(
+                "Failed to update project due to data validation errors. Please check your input.",
+                "project",
+                "dataintegrity"
+            );
+        } catch (Exception e) {
+            LOG.error("Unexpected error while updating project: {}", e.getMessage());
+            throw new BadRequestAlertException("Failed to update project. Please try again.", "project", "updatefailed");
+        }
+    }
 }
