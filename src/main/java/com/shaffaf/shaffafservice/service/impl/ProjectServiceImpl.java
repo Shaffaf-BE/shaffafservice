@@ -237,4 +237,206 @@ public class ProjectServiceImpl implements ProjectService {
             throw new BadRequestAlertException("Failed to update project. Please try again.", "project", "updatefailed");
         }
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<ProjectDTO> findByIdSecure(Long projectId, String username, boolean isAdmin) {
+        LOG.debug("Request to get Project securely : projectId={}, username={}, isAdmin={}", projectId, username, isAdmin);
+
+        // Validate input
+        if (projectId == null) {
+            throw new BadRequestAlertException("Project ID cannot be null", "project", "idnull");
+        }
+
+        try {
+            Optional<Project> projectOptional;
+
+            if (isAdmin) {
+                // Admin can access any project
+                LOG.debug("Admin access - retrieving project {} without seller validation", projectId);
+                projectOptional = projectRepository.findByIdForAdmin(projectId);
+            } else {
+                // For sellers, validate mobile number and ownership
+                if (username == null || username.trim().isEmpty()) {
+                    throw new BadRequestAlertException("Username cannot be null for seller access", "project", "usernamenull");
+                }
+
+                // Normalize the phone number to handle various formats
+                String normalizedPhone = com.shaffaf.shaffafservice.util.PhoneNumberUtil.normalize(username);
+                LOG.debug("Seller access - original username: '{}', normalized phone: '{}'", username, normalizedPhone);
+
+                // Validate mobile number format for security
+                if (!com.shaffaf.shaffafservice.util.PhoneNumberUtil.isValidPakistaniMobile(normalizedPhone)) {
+                    String errorMessage = String.format(
+                        "Invalid phone number format for seller access. Expected format: %s, but received: %s. " +
+                        "Please ensure your seller account is registered with a valid Pakistani mobile number.",
+                        com.shaffaf.shaffafservice.util.PhoneNumberUtil.EXAMPLE_PHONE_NUMBER,
+                        username
+                    );
+                    LOG.warn("Phone validation failed for user: '{}' (normalized: '{}')", username, normalizedPhone);
+                    throw new BadRequestAlertException(errorMessage, "project", "invalidphone");
+                }
+
+                // Get project with seller ownership validation
+                LOG.debug("Seller access - retrieving project {} with phone number validation: {}", projectId, normalizedPhone);
+                projectOptional = projectRepository.findByIdSecure(projectId, normalizedPhone);
+
+                if (projectOptional.isEmpty()) {
+                    LOG.debug("Project {} not found or not accessible for seller with phone: {}", projectId, normalizedPhone);
+                    return Optional.empty();
+                }
+            }
+
+            return projectOptional.map(projectMapper::toDto);
+        } catch (BadRequestAlertException e) {
+            // Re-throw validation exceptions
+            throw e;
+        } catch (Exception e) {
+            LOG.error("Unexpected error while retrieving project {}: {}", projectId, e.getMessage());
+            throw new BadRequestAlertException("Failed to retrieve project. Please try again.", "project", "retrievalfailed");
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProjectDTO> findAllSecure(
+        String username,
+        boolean isAdmin,
+        int page,
+        int size,
+        String nameFilter,
+        String statusFilter,
+        String sellerNameFilter
+    ) {
+        LOG.debug("Request to get all projects securely. User: '{}', IsAdmin: {}, Page: {}, Size: {}", username, isAdmin, page, size);
+        LOG.debug("Filters - Name: '{}', Status: '{}', SellerName: '{}'", nameFilter, statusFilter, sellerNameFilter);
+
+        // Validate pagination parameters
+        if (page < 0) {
+            throw new BadRequestAlertException("Page number cannot be negative", "project", "invalidpage");
+        }
+        if (size <= 0 || size > 100) {
+            throw new BadRequestAlertException("Page size must be between 1 and 100", "project", "invalidpagesize");
+        }
+
+        // Calculate offset for native SQL pagination
+        int offset = page * size;
+
+        // Sanitize filter inputs to prevent SQL injection
+        String sanitizedNameFilter = sanitizeFilter(nameFilter);
+        String sanitizedStatusFilter = sanitizeFilter(statusFilter);
+        String sanitizedSellerNameFilter = sanitizeFilter(sellerNameFilter);
+
+        try {
+            if (isAdmin) {
+                // Admin can access all projects
+                LOG.debug("Admin access - retrieving all projects with filters");
+
+                // Get projects and total count
+                java.util.List<Project> projects = projectRepository.findAllForAdminSecure(
+                    sanitizedNameFilter,
+                    sanitizedStatusFilter,
+                    sanitizedSellerNameFilter,
+                    offset,
+                    size
+                );
+                long totalCount = projectRepository.countForAdminSecure(
+                    sanitizedNameFilter,
+                    sanitizedStatusFilter,
+                    sanitizedSellerNameFilter
+                );
+
+                // Convert to DTOs
+                java.util.List<ProjectDTO> projectDTOs = projects
+                    .stream()
+                    .map(projectMapper::toDto)
+                    .collect(java.util.stream.Collectors.toList());
+
+                LOG.info("Admin retrieved {} projects out of {} total", projectDTOs.size(), totalCount);
+
+                // Create Page object
+                return new org.springframework.data.domain.PageImpl<>(
+                    projectDTOs,
+                    org.springframework.data.domain.PageRequest.of(page, size),
+                    totalCount
+                );
+            } else {
+                // For sellers, validate mobile number and get only their projects
+                if (username == null || username.trim().isEmpty()) {
+                    throw new BadRequestAlertException("Username cannot be null for seller access", "project", "usernamenull");
+                }
+
+                // Normalize the phone number to handle various formats
+                String normalizedPhone = com.shaffaf.shaffafservice.util.PhoneNumberUtil.normalize(username);
+                LOG.debug("Seller access - original username: '{}', normalized phone: '{}'", username, normalizedPhone);
+
+                // Validate mobile number format for security
+                if (!com.shaffaf.shaffafservice.util.PhoneNumberUtil.isValidPakistaniMobile(normalizedPhone)) {
+                    String errorMessage = String.format(
+                        "Invalid phone number format for seller access. Expected format: %s, but received: %s. " +
+                        "Please ensure your seller account is registered with a valid Pakistani mobile number.",
+                        com.shaffaf.shaffafservice.util.PhoneNumberUtil.EXAMPLE_PHONE_NUMBER,
+                        username
+                    );
+                    LOG.warn("Phone validation failed for user: '{}' (normalized: '{}')", username, normalizedPhone);
+                    throw new BadRequestAlertException(errorMessage, "project", "invalidphone");
+                }
+
+                // Get projects for this seller only (ignore sellerNameFilter for seller users)
+                LOG.debug("Seller access - retrieving projects for phone number: {}", normalizedPhone);
+
+                java.util.List<Project> projects = projectRepository.findAllForSellerSecure(
+                    normalizedPhone,
+                    sanitizedNameFilter,
+                    sanitizedStatusFilter,
+                    offset,
+                    size
+                );
+                long totalCount = projectRepository.countForSellerSecure(normalizedPhone, sanitizedNameFilter, sanitizedStatusFilter);
+
+                // Convert to DTOs
+                java.util.List<ProjectDTO> projectDTOs = projects
+                    .stream()
+                    .map(projectMapper::toDto)
+                    .collect(java.util.stream.Collectors.toList());
+
+                LOG.info("Seller '{}' retrieved {} projects out of {} total", normalizedPhone, projectDTOs.size(), totalCount);
+
+                // Create Page object
+                return new org.springframework.data.domain.PageImpl<>(
+                    projectDTOs,
+                    org.springframework.data.domain.PageRequest.of(page, size),
+                    totalCount
+                );
+            }
+        } catch (BadRequestAlertException e) {
+            // Re-throw validation exceptions
+            throw e;
+        } catch (Exception e) {
+            LOG.error("Unexpected error while retrieving projects for user '{}': {}", username, e.getMessage());
+            throw new BadRequestAlertException("Failed to retrieve projects. Please try again.", "project", "retrievalfailed");
+        }
+    }
+
+    /**
+     * Sanitizes filter inputs to prevent SQL injection attacks.
+     *
+     * @param filter the filter string to sanitize
+     * @return sanitized filter string, null if input was null or empty
+     */
+    private String sanitizeFilter(String filter) {
+        if (filter == null || filter.trim().isEmpty()) {
+            return null;
+        }
+
+        // Remove potentially dangerous characters and limit length
+        String sanitized = filter
+            .trim()
+            .replaceAll("[;'\"\\\\]", "") // Remove SQL injection characters
+            .replaceAll("--", "") // Remove SQL comments
+            .replaceAll("/\\*.*?\\*/", "") // Remove SQL block comments
+            .substring(0, Math.min(filter.length(), 100)); // Limit length
+
+        return sanitized.isEmpty() ? null : sanitized;
+    }
 }

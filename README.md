@@ -43,22 +43,124 @@ The platform includes secure, high-performance APIs for project management with 
 - **Security**: Ownership verification through mobile number validation
 - **Performance**: Uses native PostgreSQL update queries
 
-#### 🛡️ Security Validation Flow
+##### 3. Get Project by ID (Secure)
 
-1. **Authentication Check**: Verify user is properly authenticated
-2. **Mobile Number Validation**: Validate Pakistani mobile number format (+92-XXX-XXXXXXX)
-3. **Seller Verification**: Confirm seller exists and is active
-4. **Project Ownership**: Verify seller owns the project (for updates)
-5. **Input Sanitization**: Prevent XSS and injection attacks
-6. **Rate Limiting**: Prevent API abuse
-7. **Native Query Execution**: Secure database operations
+**Endpoint**: `GET /api/projects/v1/secure/{id}`
+
+- **Authentication**: Requires SELLER or ADMIN role
+- **Authorization**:
+  - SELLER: Can only access their own projects (validated by mobile number)
+  - ADMIN: Can access any project without mobile number validation
+- **Security**: Native SQL queries with ownership validation
+- **Performance**: Optimized database queries for fast project retrieval
+- **Validation**: Pakistani mobile number format validation for seller access
+
+### 📋 Secure Get All Projects API
+
+**Endpoint**: `GET /api/projects/v1/secure`
+
+A secure endpoint to retrieve all projects with role-based access control, pagination, and filtering capabilities.
+
+#### 🎯 Features
+
+- **Authentication**: Requires SELLER or ADMIN role
+- **Authorization**:
+  - SELLER: Can only access their own projects (validated by mobile number)
+  - ADMIN: Can access all projects in the system
+- **Security**: Native SQL queries with ownership validation
+- **Performance**: Optimized database queries with pagination
+- **Filtering**: Support for name, status, and seller name filters
+- **Validation**: Pakistani mobile number format validation for seller access
+
+#### 📊 Query Parameters
+
+| Parameter          | Type    | Required | Default | Description                               |
+| ------------------ | ------- | -------- | ------- | ----------------------------------------- |
+| `page`             | Integer | No       | 0       | Page number (0-based)                     |
+| `size`             | Integer | No       | 20      | Page size (1-100)                         |
+| `nameFilter`       | String  | No       | -       | Filter by project name (case-insensitive) |
+| `statusFilter`     | String  | No       | -       | Filter by project status                  |
+| `sellerNameFilter` | String  | No       | -       | Filter by seller name (ADMIN only)        |
 
 #### 📝 Request/Response Examples
 
-**Create Project Request**:
+**Get All Projects Request (Admin)**:
+
+```bash
+# Get first page with 10 projects
+GET /api/projects/v1/secure?page=0&size=10
+Authorization: Bearer <jwt-token-for-admin>
+
+# With filters
+GET /api/projects/v1/secure?page=0&size=20&nameFilter=Green&statusFilter=ACTIVE&sellerNameFilter=Ahmed
+Authorization: Bearer <jwt-token-for-admin>
+```
+
+**Get All Projects Request (Seller)**:
+
+```bash
+# Seller can only see their own projects
+GET /api/projects/v1/secure?page=0&size=10&nameFilter=Residency
+Authorization: Bearer <jwt-token-for-seller>
+```
+
+**Response Example**:
 
 ```json
 {
+  "content": [
+    {
+      "id": 123,
+      "name": "Green Valley Residency",
+      "description": "Modern residential project in Lahore",
+      "startDate": "2025-07-01",
+      "endDate": "2027-06-30",
+      "status": "ACTIVE",
+      "feesPerUnitPerMonth": 25000.0,
+      "unionHeadName": "Ahmed Ali",
+      "unionHeadMobileNumber": "+92-300-1234567",
+      "numberOfUnits": 100,
+      "seller": {
+        "id": 456,
+        "firstName": "Muhammad",
+        "lastName": "Hassan",
+        "phoneNumber": "+923001234567"
+      }
+    }
+  ],
+  "pageable": {
+    "sort": {
+      "sorted": true,
+      "unsorted": false,
+      "empty": false
+    },
+    "pageNumber": 0,
+    "pageSize": 10,
+    "offset": 0,
+    "paged": true,
+    "unpaged": false
+  },
+  "totalElements": 25,
+  "totalPages": 3,
+  "last": false,
+  "first": true,
+  "number": 0,
+  "size": 10,
+  "numberOfElements": 10,
+  "sort": {
+    "sorted": true,
+    "unsorted": false,
+    "empty": false
+  },
+  "empty": false
+}
+```
+
+**Response Example (Single Project)**:
+
+```json
+{
+  "id": 123,
   "name": "Green Valley Residency",
   "description": "Modern residential project in Lahore",
   "startDate": "2025-07-01",
@@ -67,24 +169,19 @@ The platform includes secure, high-performance APIs for project management with 
   "feesPerUnitPerMonth": 25000.0,
   "unionHeadName": "Ahmed Ali",
   "unionHeadMobileNumber": "+92-300-1234567",
-  "numberOfUnits": 100
-}
-```
-
-**Update Project Request**:
-
-```json
-{
-  "id": 123,
-  "name": "Green Valley Residency - Phase 2",
-  "description": "Updated description with Phase 2 details",
-  "startDate": "2025-07-01",
-  "endDate": "2028-06-30",
-  "status": "ACTIVE",
-  "feesPerUnitPerMonth": 28000.0,
-  "unionHeadName": "Ahmed Ali",
-  "unionHeadMobileNumber": "+92-300-1234567",
-  "numberOfUnits": 150
+  "numberOfUnits": 100,
+  "seller": {
+    "id": 456,
+    "firstName": "Muhammad",
+    "lastName": "Hassan",
+    "phoneNumber": "+923001234567",
+    "email": "hassan@example.com",
+    "status": "ACTIVE"
+  },
+  "createdBy": "+923001234567",
+  "createdDate": "2025-06-21T12:30:45Z",
+  "lastModifiedBy": "+923001234567",
+  "lastModifiedDate": "2025-06-21T14:15:30Z"
 }
 ```
 

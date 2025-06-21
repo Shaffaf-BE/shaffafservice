@@ -496,7 +496,7 @@ public class ProjectResource {
         ProjectDTO result = projectService.updateProjectNative(projectDTO, normalizedPhone);
 
         LOG.info(
-            "Project updated successfully by seller: {} (normalized: {}) with ID: {}",
+            "Project updated successfully by seller. Original username: '{}', Normalized phone: '{}', Project ID: {}",
             currentUsername,
             normalizedPhone,
             result.getId()
@@ -505,5 +505,138 @@ public class ProjectResource {
         return ResponseEntity.ok()
             .headers(HeaderUtil.createEntityUpdateAlert(applicationName, true, ENTITY_NAME, result.getId().toString()))
             .body(result);
+    }
+
+    /**
+     * {@code GET  /secure/:id} : Get a project by ID with security validation.
+     * Only ADMIN and SELLER users can access this endpoint.
+     * SELLER users can only access their own projects (validated by mobile number).
+     * ADMIN users can access any project.
+     *
+     * @param id the id of the projectDTO to retrieve.
+     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body the projectDTO,
+     *         or with status {@code 404 (Not Found)} if the project is not found or not accessible.
+     */
+    @GetMapping("/secure/{id}")
+    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.SELLER + "\") or hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
+    public ResponseEntity<ProjectDTO> getProjectSecure(@PathVariable("id") Long id) {
+        LOG.debug("REST request to get Project securely : {}", id);
+
+        // Get current user information
+        String currentUsername = SecurityUtils.getCurrentUserLogin()
+            .orElseThrow(() ->
+                new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Current user not found. Please ensure you are properly authenticated."
+                )
+            );
+
+        // Check if user is admin
+        boolean isAdmin = SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.ADMIN);
+
+        LOG.debug("Attempting secure project retrieval. User: '{}', IsAdmin: {}, ProjectId: {}", currentUsername, isAdmin, id);
+
+        try {
+            Optional<ProjectDTO> projectDTO = projectService.findByIdSecure(id, currentUsername, isAdmin);
+
+            if (projectDTO.isPresent()) {
+                LOG.info("Project {} retrieved successfully by user '{}' (Admin: {})", id, currentUsername, isAdmin);
+                return ResponseEntity.ok().body(projectDTO.get());
+            } else {
+                LOG.warn("Project {} not found or not accessible for user '{}' (Admin: {})", id, currentUsername, isAdmin);
+                return ResponseEntity.notFound().build();
+            }
+        } catch (Exception e) {
+            LOG.error("Error retrieving project {} for user '{}': {}", id, currentUsername, e.getMessage());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        }
+    }
+
+    /**
+     * {@code GET  /secure} : Get all projects with security validation, pagination, and filtering.
+     * Only ADMIN and SELLER users can access this endpoint.
+     * SELLER users can only access their own projects (validated by mobile number).
+     * ADMIN users can access all projects.
+     *
+     * @param page the page number (0-based, default: 0)
+     * @param size the page size (1-100, default: 20)
+     * @param nameFilter filter by project name (optional)
+     * @param statusFilter filter by project status (optional)
+     * @param sellerNameFilter filter by seller name (optional, admin only)
+     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body containing page of projects,
+     *         or with status {@code 400 (Bad Request)} if validation fails.
+     */
+    @GetMapping("/secure")
+    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.SELLER + "\") or hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
+    public ResponseEntity<Page<ProjectDTO>> getAllProjectsSecure(
+        @RequestParam(value = "page", defaultValue = "0") int page,
+        @RequestParam(value = "size", defaultValue = "20") int size,
+        @RequestParam(value = "nameFilter", required = false) String nameFilter,
+        @RequestParam(value = "statusFilter", required = false) String statusFilter,
+        @RequestParam(value = "sellerNameFilter", required = false) String sellerNameFilter
+    ) {
+        LOG.debug("REST request to get all projects securely. Page: {}, Size: {}", page, size);
+        LOG.debug("Filters - Name: '{}', Status: '{}', SellerName: '{}'", nameFilter, statusFilter, sellerNameFilter);
+
+        // Get current user information
+        String currentUsername = SecurityUtils.getCurrentUserLogin()
+            .orElseThrow(() ->
+                new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Current user not found. Please ensure you are properly authenticated."
+                )
+            );
+
+        // Check if user is admin
+        boolean isAdmin = SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.ADMIN);
+
+        LOG.debug("Attempting secure projects retrieval. User: '{}', IsAdmin: {}", currentUsername, isAdmin);
+
+        // Validate input parameters
+        if (page < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Page number cannot be negative");
+        }
+        if (size <= 0 || size > 100) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Page size must be between 1 and 100");
+        }
+
+        // For non-admin users, ignore sellerNameFilter
+        if (!isAdmin && sellerNameFilter != null) {
+            LOG.debug("Ignoring sellerNameFilter for non-admin user: {}", currentUsername);
+            sellerNameFilter = null;
+        }
+
+        try {
+            Page<ProjectDTO> projectsPage = projectService.findAllSecure(
+                currentUsername,
+                isAdmin,
+                page,
+                size,
+                nameFilter,
+                statusFilter,
+                sellerNameFilter
+            );
+
+            LOG.info(
+                "Retrieved {} projects (page {}, size {}) for user '{}' (Admin: {})",
+                projectsPage.getContent().size(),
+                page,
+                size,
+                currentUsername,
+                isAdmin
+            );
+            LOG.info("Total projects available: {}, Total pages: {}", projectsPage.getTotalElements(), projectsPage.getTotalPages());
+
+            // Add pagination headers
+            HttpHeaders headers = PaginationUtil.generatePaginationHttpHeaders(
+                ServletUriComponentsBuilder.fromCurrentRequest(),
+                projectsPage
+            );
+
+            return ResponseEntity.ok().headers(headers).body(projectsPage);
+        } catch (Exception e) {
+            LOG.error("Error retrieving projects for user '{}': {}", currentUsername, e.getMessage());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        }
     }
 }

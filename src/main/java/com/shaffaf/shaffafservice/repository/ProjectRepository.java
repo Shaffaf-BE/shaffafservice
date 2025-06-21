@@ -3,6 +3,8 @@ package com.shaffaf.shaffafservice.repository;
 import com.shaffaf.shaffafservice.domain.Project;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -131,4 +133,149 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
         nativeQuery = true
     )
     Long getProjectOwnerId(@Param("projectId") Long projectId);
+
+    /**
+     * Get project by ID with seller ownership validation using native SQL for security.
+     * This is used for the secure get project API to ensure only project owners or admins can access projects.
+     *
+     * @param projectId ID of the project to retrieve
+     * @param sellerPhoneNumber Phone number of the seller (for ownership validation, null for admin access)
+     * @return The project if found and accessible, null otherwise
+     */
+    @Query(
+        value = "SELECT p.* FROM project p " +
+        "JOIN seller s ON p.seller_id = s.id " +
+        "WHERE p.id = :projectId " +
+        "AND s.deleted_on IS NULL " +
+        "AND s.status = 'ACTIVE' " +
+        "AND (:sellerPhoneNumber IS NULL OR s.phone_number = :sellerPhoneNumber)",
+        nativeQuery = true
+    )
+    Optional<Project> findByIdSecure(@Param("projectId") Long projectId, @Param("sellerPhoneNumber") String sellerPhoneNumber);
+
+    /**
+     * Get project by ID with complete details using native SQL for admin access.
+     * This bypasses seller ownership validation and returns the project if it exists.
+     *
+     * @param projectId ID of the project to retrieve
+     * @return The project if found, null otherwise
+     */
+    @Query(
+        value = "SELECT p.* FROM project p " +
+        "JOIN seller s ON p.seller_id = s.id " +
+        "WHERE p.id = :projectId " +
+        "AND s.deleted_on IS NULL",
+        nativeQuery = true
+    )
+    Optional<Project> findByIdForAdmin(@Param("projectId") Long projectId);
+
+    /**
+     * Get all projects for a specific seller with pagination and filtering using native SQL.
+     * This ensures sellers can only see their own projects.
+     *
+     * @param sellerPhoneNumber Phone number of the seller (for ownership validation)
+     * @param nameFilter Filter by project name (optional, use null to skip)
+     * @param statusFilter Filter by project status (optional, use null to skip)
+     * @param offset Pagination offset
+     * @param limit Pagination limit
+     * @return List of projects for the seller
+     */
+    @Query(
+        value = "SELECT p.* FROM project p " +
+        "JOIN seller s ON p.seller_id = s.id " +
+        "WHERE s.phone_number = :sellerPhoneNumber " +
+        "AND s.deleted_on IS NULL " +
+        "AND s.status = 'ACTIVE' " +
+        "AND (:nameFilter IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :nameFilter, '%'))) " +
+        "AND (:statusFilter IS NULL OR UPPER(p.status) = UPPER(:statusFilter)) " +
+        "ORDER BY p.created_date DESC " +
+        "OFFSET :offset LIMIT :limit",
+        nativeQuery = true
+    )
+    List<Project> findAllForSellerSecure(
+        @Param("sellerPhoneNumber") String sellerPhoneNumber,
+        @Param("nameFilter") String nameFilter,
+        @Param("statusFilter") String statusFilter,
+        @Param("offset") int offset,
+        @Param("limit") int limit
+    );
+
+    /**
+     * Count total projects for a specific seller with filtering.
+     * Used for pagination calculation.
+     *
+     * @param sellerPhoneNumber Phone number of the seller
+     * @param nameFilter Filter by project name (optional, use null to skip)
+     * @param statusFilter Filter by project status (optional, use null to skip)
+     * @return Total count of projects for the seller
+     */
+    @Query(
+        value = "SELECT COUNT(*) FROM project p " +
+        "JOIN seller s ON p.seller_id = s.id " +
+        "WHERE s.phone_number = :sellerPhoneNumber " +
+        "AND s.deleted_on IS NULL " +
+        "AND s.status = 'ACTIVE' " +
+        "AND (:nameFilter IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :nameFilter, '%'))) " +
+        "AND (:statusFilter IS NULL OR UPPER(p.status) = UPPER(:statusFilter))",
+        nativeQuery = true
+    )
+    long countForSellerSecure(
+        @Param("sellerPhoneNumber") String sellerPhoneNumber,
+        @Param("nameFilter") String nameFilter,
+        @Param("statusFilter") String statusFilter
+    );
+
+    /**
+     * Get all projects for admin with pagination and filtering using native SQL.
+     * This allows admins to see all projects in the system.
+     *
+     * @param nameFilter Filter by project name (optional, use null to skip)
+     * @param statusFilter Filter by project status (optional, use null to skip)
+     * @param sellerNameFilter Filter by seller name (optional, use null to skip)
+     * @param offset Pagination offset
+     * @param limit Pagination limit
+     * @return List of all projects
+     */
+    @Query(
+        value = "SELECT p.* FROM project p " +
+        "JOIN seller s ON p.seller_id = s.id " +
+        "WHERE s.deleted_on IS NULL " +
+        "AND (:nameFilter IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :nameFilter, '%'))) " +
+        "AND (:statusFilter IS NULL OR UPPER(p.status) = UPPER(:statusFilter)) " +
+        "AND (:sellerNameFilter IS NULL OR LOWER(CONCAT(s.first_name, ' ', s.last_name)) LIKE LOWER(CONCAT('%', :sellerNameFilter, '%'))) " +
+        "ORDER BY p.created_date DESC " +
+        "OFFSET :offset LIMIT :limit",
+        nativeQuery = true
+    )
+    List<Project> findAllForAdminSecure(
+        @Param("nameFilter") String nameFilter,
+        @Param("statusFilter") String statusFilter,
+        @Param("sellerNameFilter") String sellerNameFilter,
+        @Param("offset") int offset,
+        @Param("limit") int limit
+    );
+
+    /**
+     * Count total projects for admin with filtering.
+     * Used for pagination calculation.
+     *
+     * @param nameFilter Filter by project name (optional, use null to skip)
+     * @param statusFilter Filter by project status (optional, use null to skip)
+     * @param sellerNameFilter Filter by seller name (optional, use null to skip)
+     * @return Total count of all projects
+     */
+    @Query(
+        value = "SELECT COUNT(*) FROM project p " +
+        "JOIN seller s ON p.seller_id = s.id " +
+        "WHERE s.deleted_on IS NULL " +
+        "AND (:nameFilter IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :nameFilter, '%'))) " +
+        "AND (:statusFilter IS NULL OR UPPER(p.status) = UPPER(:statusFilter)) " +
+        "AND (:sellerNameFilter IS NULL OR LOWER(CONCAT(s.first_name, ' ', s.last_name)) LIKE LOWER(CONCAT('%', :sellerNameFilter, '%')))",
+        nativeQuery = true
+    )
+    long countForAdminSecure(
+        @Param("nameFilter") String nameFilter,
+        @Param("statusFilter") String statusFilter,
+        @Param("sellerNameFilter") String sellerNameFilter
+    );
 }
