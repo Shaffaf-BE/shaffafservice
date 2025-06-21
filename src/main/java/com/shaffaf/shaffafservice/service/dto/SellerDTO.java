@@ -1,6 +1,7 @@
 package com.shaffaf.shaffafservice.service.dto;
 
 import com.shaffaf.shaffafservice.domain.enumeration.Status;
+import com.shaffaf.shaffafservice.util.PhoneNumberUtil;
 import jakarta.validation.constraints.*;
 import java.io.Serializable;
 import java.time.Instant;
@@ -24,6 +25,7 @@ public class SellerDTO implements Serializable {
     private String email;
 
     @NotNull
+    @Pattern(regexp = PhoneNumberUtil.PAKISTANI_MOBILE_REGEX, message = PhoneNumberUtil.INVALID_PHONE_ERROR_MESSAGE)
     private String phoneNumber;
 
     @NotNull

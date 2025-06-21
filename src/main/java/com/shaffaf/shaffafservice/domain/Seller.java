@@ -24,7 +24,7 @@ public class Seller implements Serializable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sequenceGenerator")
-    @SequenceGenerator(name = "sequenceGenerator")
+    @SequenceGenerator(name = "sequenceGenerator", sequenceName = "seller_seq")
     @Column(name = "id")
     private Long id;
 

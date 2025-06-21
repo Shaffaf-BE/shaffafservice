@@ -22,7 +22,7 @@ public class Notice implements Serializable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sequenceGenerator")
-    @SequenceGenerator(name = "sequenceGenerator")
+    @SequenceGenerator(name = "sequenceGenerator", sequenceName = "notice_seq")
     @Column(name = "id")
     private Long id;
 

@@ -23,7 +23,7 @@ public class ResidentType implements Serializable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sequenceGenerator")
-    @SequenceGenerator(name = "sequenceGenerator")
+    @SequenceGenerator(name = "sequenceGenerator", sequenceName = "resident_type_seq")
     @Column(name = "id")
     private Long id;
 

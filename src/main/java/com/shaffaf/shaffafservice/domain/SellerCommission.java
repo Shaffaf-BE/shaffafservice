@@ -22,7 +22,7 @@ public class SellerCommission implements Serializable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sequenceGenerator")
-    @SequenceGenerator(name = "sequenceGenerator")
+    @SequenceGenerator(name = "sequenceGenerator", sequenceName = "seller_commission_seq")
     @Column(name = "id")
     private Long id;
 

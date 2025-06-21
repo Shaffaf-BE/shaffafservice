@@ -23,7 +23,7 @@ public class ComplainStatus implements Serializable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sequenceGenerator")
-    @SequenceGenerator(name = "sequenceGenerator")
+    @SequenceGenerator(name = "sequenceGenerator", sequenceName = "complain_status_seq")
     @Column(name = "id")
     private Long id;
 

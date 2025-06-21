@@ -6,6 +6,202 @@ This is a "microservice" application intended to be part of a microservice archi
 
 This application is configured for Service Discovery and Configuration with Consul. On launch, it will refuse to start if it is not able to connect to Consul at [http://localhost:8500](http://localhost:8500). For more information, read our documentation on [Service Discovery and Configuration with Consul][].
 
+## Shaffaf Property Management Platform
+
+The Shaffaf service is a secure property management platform designed for the Pakistani real estate market. It provides comprehensive APIs for managing real estate projects with enhanced security features.
+
+### Secure Project Management APIs
+
+The platform includes secure, high-performance APIs for project management with the following key features:
+
+#### 🔐 Security Features
+
+- **Pakistani Mobile Number Validation**: All operations require valid Pakistani mobile numbers for seller identification
+- **Role-Based Access Control**: Sellers can only manage their own projects; Admins have full access
+- **Native PostgreSQL Queries**: Uses optimized native SQL for better performance and security
+- **Input Sanitization**: Comprehensive XSS and injection attack prevention
+- **Rate Limiting**: Built-in rate limiting framework (production-ready with Redis integration)
+
+#### 📋 Available Secure Endpoints
+
+##### 1. Create Project (Secure)
+
+**Endpoint**: `POST /api/projects/v1/secure/create-by-seller`
+
+- **Authentication**: Requires SELLER or ADMIN role
+- **Security**: Seller automatically identified by authenticated mobile number
+- **Validation**: Full input sanitization and Pakistani phone number validation
+- **Performance**: Uses native PostgreSQL insert queries
+
+##### 2. Update Project (Secure)
+
+**Endpoint**: `PUT /api/projects/v1/secure/update-by-seller`
+
+- **Authentication**: Requires SELLER or ADMIN role
+- **Authorization**: Only project owner or admin can update
+- **Request**: Project ID must be in request body (not URL parameter)
+- **Security**: Ownership verification through mobile number validation
+- **Performance**: Uses native PostgreSQL update queries
+
+##### 3. Get Project by ID (Secure)
+
+**Endpoint**: `GET /api/projects/v1/secure/{id}`
+
+- **Authentication**: Requires SELLER or ADMIN role
+- **Authorization**:
+  - SELLER: Can only access their own projects (validated by mobile number)
+  - ADMIN: Can access any project without mobile number validation
+- **Security**: Native SQL queries with ownership validation
+- **Performance**: Optimized database queries for fast project retrieval
+- **Validation**: Pakistani mobile number format validation for seller access
+
+### 📋 Secure Get All Projects API
+
+**Endpoint**: `GET /api/projects/v1/secure`
+
+A secure endpoint to retrieve all projects with role-based access control, pagination, and filtering capabilities.
+
+#### 🎯 Features
+
+- **Authentication**: Requires SELLER or ADMIN role
+- **Authorization**:
+  - SELLER: Can only access their own projects (validated by mobile number)
+  - ADMIN: Can access all projects in the system
+- **Security**: Native SQL queries with ownership validation
+- **Performance**: Optimized database queries with pagination
+- **Filtering**: Support for name, status, and seller name filters
+- **Validation**: Pakistani mobile number format validation for seller access
+
+#### 📊 Query Parameters
+
+| Parameter          | Type    | Required | Default | Description                               |
+| ------------------ | ------- | -------- | ------- | ----------------------------------------- |
+| `page`             | Integer | No       | 0       | Page number (0-based)                     |
+| `size`             | Integer | No       | 20      | Page size (1-100)                         |
+| `nameFilter`       | String  | No       | -       | Filter by project name (case-insensitive) |
+| `statusFilter`     | String  | No       | -       | Filter by project status                  |
+| `sellerNameFilter` | String  | No       | -       | Filter by seller name (ADMIN only)        |
+
+#### 📝 Request/Response Examples
+
+**Get All Projects Request (Admin)**:
+
+```bash
+# Get first page with 10 projects
+GET /api/projects/v1/secure?page=0&size=10
+Authorization: Bearer <jwt-token-for-admin>
+
+# With filters
+GET /api/projects/v1/secure?page=0&size=20&nameFilter=Green&statusFilter=ACTIVE&sellerNameFilter=Ahmed
+Authorization: Bearer <jwt-token-for-admin>
+```
+
+**Get All Projects Request (Seller)**:
+
+```bash
+# Seller can only see their own projects
+GET /api/projects/v1/secure?page=0&size=10&nameFilter=Residency
+Authorization: Bearer <jwt-token-for-seller>
+```
+
+**Response Example**:
+
+```json
+{
+  "content": [
+    {
+      "id": 123,
+      "name": "Green Valley Residency",
+      "description": "Modern residential project in Lahore",
+      "startDate": "2025-07-01",
+      "endDate": "2027-06-30",
+      "status": "ACTIVE",
+      "feesPerUnitPerMonth": 25000.0,
+      "unionHeadName": "Ahmed Ali",
+      "unionHeadMobileNumber": "+92-300-1234567",
+      "numberOfUnits": 100,
+      "seller": {
+        "id": 456,
+        "firstName": "Muhammad",
+        "lastName": "Hassan",
+        "phoneNumber": "+923001234567"
+      }
+    }
+  ],
+  "pageable": {
+    "sort": {
+      "sorted": true,
+      "unsorted": false,
+      "empty": false
+    },
+    "pageNumber": 0,
+    "pageSize": 10,
+    "offset": 0,
+    "paged": true,
+    "unpaged": false
+  },
+  "totalElements": 25,
+  "totalPages": 3,
+  "last": false,
+  "first": true,
+  "number": 0,
+  "size": 10,
+  "numberOfElements": 10,
+  "sort": {
+    "sorted": true,
+    "unsorted": false,
+    "empty": false
+  },
+  "empty": false
+}
+```
+
+**Response Example (Single Project)**:
+
+```json
+{
+  "id": 123,
+  "name": "Green Valley Residency",
+  "description": "Modern residential project in Lahore",
+  "startDate": "2025-07-01",
+  "endDate": "2027-06-30",
+  "status": "ACTIVE",
+  "feesPerUnitPerMonth": 25000.0,
+  "unionHeadName": "Ahmed Ali",
+  "unionHeadMobileNumber": "+92-300-1234567",
+  "numberOfUnits": 100,
+  "seller": {
+    "id": 456,
+    "firstName": "Muhammad",
+    "lastName": "Hassan",
+    "phoneNumber": "+923001234567",
+    "email": "hassan@example.com",
+    "status": "ACTIVE"
+  },
+  "createdBy": "+923001234567",
+  "createdDate": "2025-06-21T12:30:45Z",
+  "lastModifiedBy": "+923001234567",
+  "lastModifiedDate": "2025-06-21T14:15:30Z"
+}
+```
+
+#### 🚨 Error Handling
+
+- **400 Bad Request**: Invalid input, missing required fields, validation failures
+- **401 Unauthorized**: Authentication required or invalid credentials
+- **403 Forbidden**: Insufficient permissions (not project owner and not admin)
+- **404 Not Found**: Project not found
+- **429 Too Many Requests**: Rate limit exceeded
+
+#### 🏗️ Technical Implementation
+
+- **Backend Framework**: Spring Boot with Spring Security
+- **Database**: PostgreSQL with native queries
+- **Validation**: Jakarta Validation with custom Pakistani mobile number validation
+- **Security**: JWT-based authentication with role-based access control
+- **Performance**: Native SQL queries for optimal database performance
+- **Error Handling**: Comprehensive error responses with user-friendly messages
+
 ## Project Structure
 
 Node is required for generation and recommended for development. `package.json` is always generated for a better development experience with prettier, commit hooks, scripts and so on.

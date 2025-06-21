@@ -24,7 +24,7 @@ public class FeesCollection implements Serializable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sequenceGenerator")
-    @SequenceGenerator(name = "sequenceGenerator")
+    @SequenceGenerator(name = "sequenceGenerator", sequenceName = "fees_collection_seq")
     @Column(name = "id")
     private Long id;
 

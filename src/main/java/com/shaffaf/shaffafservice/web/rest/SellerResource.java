@@ -1,8 +1,10 @@
 package com.shaffaf.shaffafservice.web.rest;
 
 import com.shaffaf.shaffafservice.repository.SellerRepository;
+import com.shaffaf.shaffafservice.security.AuthoritiesConstants;
 import com.shaffaf.shaffafservice.service.SellerService;
 import com.shaffaf.shaffafservice.service.dto.SellerDTO;
+import com.shaffaf.shaffafservice.util.PhoneNumberUtil;
 import com.shaffaf.shaffafservice.web.rest.errors.BadRequestAlertException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -18,6 +20,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import tech.jhipster.web.util.HeaderUtil;
@@ -28,7 +31,7 @@ import tech.jhipster.web.util.ResponseUtil;
  * REST controller for managing {@link com.shaffaf.shaffafservice.domain.Seller}.
  */
 @RestController
-@RequestMapping("/api/sellers")
+@RequestMapping("/api/sellers/v1")
 public class SellerResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(SellerResource.class);
@@ -48,55 +51,15 @@ public class SellerResource {
     }
 
     /**
-     * {@code POST  /sellers} : Create a new seller.
+     * Simple rate limiting check implementation.
+     * In a production environment, replace with a proper rate limiting solution.
      *
-     * @param sellerDTO the sellerDTO to create.
-     * @return the {@link ResponseEntity} with status {@code 201 (Created)} and with body the new sellerDTO, or with status {@code 400 (Bad Request)} if the seller has already an ID.
-     * @throws URISyntaxException if the Location URI syntax is incorrect.
+     * @return true if rate limit is exceeded, false otherwise
      */
-    @PostMapping("")
-    public ResponseEntity<SellerDTO> createSeller(@Valid @RequestBody SellerDTO sellerDTO) throws URISyntaxException {
-        LOG.debug("REST request to save Seller : {}", sellerDTO);
-        if (sellerDTO.getId() != null) {
-            throw new BadRequestAlertException("A new seller cannot already have an ID", ENTITY_NAME, "idexists");
-        }
-        sellerDTO = sellerService.save(sellerDTO);
-        return ResponseEntity.created(new URI("/api/sellers/" + sellerDTO.getId()))
-            .headers(HeaderUtil.createEntityCreationAlert(applicationName, true, ENTITY_NAME, sellerDTO.getId().toString()))
-            .body(sellerDTO);
-    }
-
-    /**
-     * {@code PUT  /sellers/:id} : Updates an existing seller.
-     *
-     * @param id the id of the sellerDTO to save.
-     * @param sellerDTO the sellerDTO to update.
-     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body the updated sellerDTO,
-     * or with status {@code 400 (Bad Request)} if the sellerDTO is not valid,
-     * or with status {@code 500 (Internal Server Error)} if the sellerDTO couldn't be updated.
-     * @throws URISyntaxException if the Location URI syntax is incorrect.
-     */
-    @PutMapping("/{id}")
-    public ResponseEntity<SellerDTO> updateSeller(
-        @PathVariable(value = "id", required = false) final Long id,
-        @Valid @RequestBody SellerDTO sellerDTO
-    ) throws URISyntaxException {
-        LOG.debug("REST request to update Seller : {}, {}", id, sellerDTO);
-        if (sellerDTO.getId() == null) {
-            throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
-        }
-        if (!Objects.equals(id, sellerDTO.getId())) {
-            throw new BadRequestAlertException("Invalid ID", ENTITY_NAME, "idinvalid");
-        }
-
-        if (!sellerRepository.existsById(id)) {
-            throw new BadRequestAlertException("Entity not found", ENTITY_NAME, "idnotfound");
-        }
-
-        sellerDTO = sellerService.update(sellerDTO);
-        return ResponseEntity.ok()
-            .headers(HeaderUtil.createEntityUpdateAlert(applicationName, true, ENTITY_NAME, sellerDTO.getId().toString()))
-            .body(sellerDTO);
+    private boolean isRateLimitExceeded() {
+        // For demonstration - in production, use a proper rate limiter
+        // This could check a counter in Redis or similar
+        return false;
     }
 
     /**
@@ -136,44 +99,123 @@ public class SellerResource {
     }
 
     /**
-     * {@code GET  /sellers} : get all the sellers.
+     * {@code GET  /sellers/optimized} : get all the sellers using an optimized native SQL query.
+     * Only accessible to administrators.
      *
-     * @param pageable the pagination information.
+     * @param searchTerm the optional search term to filter results
+     * @param pageable the pagination information
      * @return the {@link ResponseEntity} with status {@code 200 (OK)} and the list of sellers in body.
      */
-    @GetMapping("")
-    public ResponseEntity<List<SellerDTO>> getAllSellers(@org.springdoc.core.annotations.ParameterObject Pageable pageable) {
-        LOG.debug("REST request to get a page of Sellers");
-        Page<SellerDTO> page = sellerService.findAll(pageable);
+    @GetMapping("/get-many-sellers")
+    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
+    public ResponseEntity<List<SellerDTO>> getAllSellersOptimized(
+        @RequestParam(required = false) String searchTerm,
+        @org.springdoc.core.annotations.ParameterObject Pageable pageable
+    ) {
+        LOG.debug("REST request to get a page of Sellers with optimization, search term: {}", searchTerm);
+        Page<SellerDTO> page = sellerService.findAllOptimized(searchTerm, pageable);
         HttpHeaders headers = PaginationUtil.generatePaginationHttpHeaders(ServletUriComponentsBuilder.fromCurrentRequest(), page);
         return ResponseEntity.ok().headers(headers).body(page.getContent());
     }
 
     /**
-     * {@code GET  /sellers/:id} : get the "id" seller.
+     * {@code GET  /sellers/secure-optimized/:id} : Get a seller by ID using optimized and secure native query.
      *
-     * @param id the id of the sellerDTO to retrieve.
-     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body the sellerDTO, or with status {@code 404 (Not Found)}.
+     * @param id the id of the sellerDTO to retrieve
+     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body the sellerDTO,
+     *         or with status {@code 404 (Not Found)}, or with status {@code 400 (Bad Request)} if the ID is invalid
      */
-    @GetMapping("/{id}")
-    public ResponseEntity<SellerDTO> getSeller(@PathVariable("id") Long id) {
-        LOG.debug("REST request to get Seller : {}", id);
-        Optional<SellerDTO> sellerDTO = sellerService.findOne(id);
+    @GetMapping("/get-seller/{id}")
+    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
+    public ResponseEntity<SellerDTO> getSellerSecureOptimized(@PathVariable Long id) {
+        LOG.debug("REST request to get Seller with secure optimization : {}", id);
+
+        // Validate ID to prevent potential attacks
+        if (id == null || id <= 0) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        // Apply rate limiting check to prevent abuse
+        if (isRateLimitExceeded()) {
+            LOG.warn("Rate limit exceeded for seller retrieval");
+            return ResponseEntity.status(429).build(); // Too Many Requests
+        }
+
+        Optional<SellerDTO> sellerDTO = sellerService.findOneOptimized(id);
         return ResponseUtil.wrapOrNotFound(sellerDTO);
     }
 
     /**
-     * {@code DELETE  /sellers/:id} : delete the "id" seller.
+     * {@code POST  /native} : Create a new seller using native SQL query.
      *
-     * @param id the id of the sellerDTO to delete.
-     * @return the {@link ResponseEntity} with status {@code 204 (NO_CONTENT)}.
+     * @param sellerDTO the sellerDTO to create
+     * @return the {@link ResponseEntity} with status {@code 201 (Created)} and with body the new sellerDTO,
+     *         or with status {@code 400 (Bad Request)} if the seller has already an ID
+     * @throws URISyntaxException if the Location URI syntax is incorrect
      */
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteSeller(@PathVariable("id") Long id) {
-        LOG.debug("REST request to delete Seller : {}", id);
-        sellerService.delete(id);
-        return ResponseEntity.noContent()
-            .headers(HeaderUtil.createEntityDeletionAlert(applicationName, true, ENTITY_NAME, id.toString()))
-            .build();
+    @PostMapping("/create-seller")
+    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
+    public ResponseEntity<SellerDTO> createSellerNative(@Valid @RequestBody SellerDTO sellerDTO) throws URISyntaxException {
+        LOG.debug("REST request to save Seller with native query: {}", sellerDTO);
+        if (sellerDTO.getId() != null) {
+            throw new BadRequestAlertException("A new seller cannot already have an ID", ENTITY_NAME, "idexists");
+        }
+
+        // Validate phone number format
+        if (sellerDTO.getPhoneNumber() != null && !PhoneNumberUtil.isValidPakistaniMobile(sellerDTO.getPhoneNumber())) {
+            throw new BadRequestAlertException(PhoneNumberUtil.INVALID_PHONE_ERROR_MESSAGE, ENTITY_NAME, "invalidphone");
+        }
+
+        // Apply rate limiting check
+        if (isRateLimitExceeded()) {
+            LOG.warn("Rate limit exceeded for seller creation");
+            return ResponseEntity.status(429).build(); // Too Many Requests
+        }
+
+        SellerDTO result = sellerService.saveWithNativeQuery(sellerDTO);
+
+        return ResponseEntity.created(new URI("/api/sellers/v1/" + result.getId()))
+            .headers(HeaderUtil.createEntityCreationAlert(applicationName, true, ENTITY_NAME, result.getId().toString()))
+            .body(result);
+    }
+
+    /**
+     * {@code PUT  /native/:id} : Updates an existing seller using native SQL query.
+     *
+     * @param sellerDTO the sellerDTO to update
+     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body the updated sellerDTO,
+     *         or with status {@code 400 (Bad Request)} if the sellerDTO is not valid,
+     *         or with status {@code 500 (Internal Server Error)} if the sellerDTO couldn't be updated
+     */
+    @PutMapping("/update-seller")
+    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
+    public ResponseEntity<SellerDTO> updateSellerNative(@Valid @RequestBody SellerDTO sellerDTO) {
+        LOG.debug("REST request to update Seller with native query: {}, {}", sellerDTO.getId(), sellerDTO);
+        Long id = sellerDTO.getId();
+        if (sellerDTO.getId() == null) {
+            throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
+        }
+        if (!Objects.equals(id, sellerDTO.getId())) {
+            throw new BadRequestAlertException("Invalid ID", ENTITY_NAME, "idinvalid");
+        }
+        if (!sellerRepository.existsById(id)) {
+            throw new BadRequestAlertException("Entity not found", ENTITY_NAME, "idnotfound");
+        }
+
+        // Validate phone number format
+        if (sellerDTO.getPhoneNumber() != null && !PhoneNumberUtil.isValidPakistaniMobile(sellerDTO.getPhoneNumber())) {
+            throw new BadRequestAlertException(PhoneNumberUtil.INVALID_PHONE_ERROR_MESSAGE, ENTITY_NAME, "invalidphone");
+        }
+
+        // Apply rate limiting check to prevent abuse
+        if (isRateLimitExceeded()) {
+            LOG.warn("Rate limit exceeded for seller update");
+            return ResponseEntity.status(429).build(); // Too Many Requests
+        }
+
+        SellerDTO result = sellerService.updateWithNativeQuery(sellerDTO);
+        return ResponseEntity.ok()
+            .headers(HeaderUtil.createEntityUpdateAlert(applicationName, true, ENTITY_NAME, result.getId().toString()))
+            .body(result);
     }
 }

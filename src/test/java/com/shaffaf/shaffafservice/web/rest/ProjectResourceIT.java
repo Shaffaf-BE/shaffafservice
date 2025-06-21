@@ -11,8 +11,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.shaffaf.shaffafservice.IntegrationTest;
 import com.shaffaf.shaffafservice.domain.Project;
+import com.shaffaf.shaffafservice.domain.Seller;
 import com.shaffaf.shaffafservice.domain.enumeration.Status;
 import com.shaffaf.shaffafservice.repository.ProjectRepository;
+import com.shaffaf.shaffafservice.repository.SellerRepository;
+import com.shaffaf.shaffafservice.security.AuthoritiesConstants;
 import com.shaffaf.shaffafservice.service.dto.ProjectDTO;
 import com.shaffaf.shaffafservice.service.mapper.ProjectMapper;
 import jakarta.persistence.EntityManager;
@@ -21,6 +24,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.AfterEach;
@@ -28,6 +32,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.context.ApplicationContext;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
@@ -64,7 +69,6 @@ class ProjectResourceIT {
 
     private static final String DEFAULT_UNION_HEAD_MOBILE_NUMBER = "AAAAAAAAAA";
     private static final String UPDATED_UNION_HEAD_MOBILE_NUMBER = "BBBBBBBBBB";
-
     private static final Integer DEFAULT_NUMBER_OF_UNITS = 1;
     private static final Integer UPDATED_NUMBER_OF_UNITS = 2;
 
@@ -89,6 +93,12 @@ class ProjectResourceIT {
     private static final Instant DEFAULT_DELETED_DATE = Instant.ofEpochMilli(0L);
     private static final Instant UPDATED_DELETED_DATE = Instant.now().truncatedTo(ChronoUnit.MILLIS);
 
+    // Seller constants for testing
+    private static final String DEFAULT_FIRST_NAME = "John";
+    private static final String DEFAULT_LAST_NAME = "Doe";
+    private static final String DEFAULT_SELLER_EMAIL = "john.doe@example.com";
+    private static final String DEFAULT_SELLER_PHONE = "+923001234567";
+
     private static final String ENTITY_API_URL = "/api/projects";
     private static final String ENTITY_API_URL_ID = ENTITY_API_URL + "/{id}";
 
@@ -102,6 +112,9 @@ class ProjectResourceIT {
     private ProjectRepository projectRepository;
 
     @Autowired
+    private SellerRepository sellerRepository;
+
+    @Autowired
     private ProjectMapper projectMapper;
 
     @Autowired
@@ -109,6 +122,9 @@ class ProjectResourceIT {
 
     @Autowired
     private MockMvc restProjectMockMvc;
+
+    @Autowired
+    private ApplicationContext applicationContext;
 
     private Project project;
 
@@ -164,6 +180,34 @@ class ProjectResourceIT {
             .lastModifiedBy(UPDATED_LAST_MODIFIED_BY)
             .lastModifiedDate(UPDATED_LAST_MODIFIED_DATE)
             .deletedDate(UPDATED_DELETED_DATE);
+    }
+
+    /**
+     * Create a Seller entity for testing.
+     */
+    public static Seller createSellerEntity() {
+        Seller seller = new Seller();
+        seller.setFirstName(DEFAULT_FIRST_NAME);
+        seller.setLastName(DEFAULT_LAST_NAME);
+        seller.setEmail(DEFAULT_SELLER_EMAIL);
+        seller.setPhoneNumber(DEFAULT_SELLER_PHONE);
+        seller.setStatus(Status.ACTIVE);
+        return seller;
+    }
+
+    /**
+     * Create a Project entity with a seller for testing.
+     */
+    public Project createProjectEntity() {
+        Project project = createEntity();
+
+        // Create and save a seller first
+        Seller seller = createSellerEntity();
+        seller = sellerRepository.saveAndFlush(seller);
+
+        // Set the seller in the project
+        project.setSeller(seller);
+        return project;
     }
 
     @BeforeEach
@@ -650,6 +694,168 @@ class ProjectResourceIT {
         assertDecrementedRepositoryCount(databaseSizeBeforeDelete);
     }
 
+    /**
+     * Test creating a project securely by a seller using the native query implementation.
+     */
+    @Test
+    @Transactional
+    @WithMockUser(authorities = "ROLE_SELLER")
+    void createProjectSecureWithSellerRole() throws Exception {
+        int databaseSizeBeforeCreate = projectRepository.findAll().size();
+
+        // Create a seller for this project
+        com.shaffaf.shaffafservice.service.dto.SellerDTO sellerDTO = new com.shaffaf.shaffafservice.service.dto.SellerDTO();
+        sellerDTO.setId(1L); // Using an existing seller
+
+        // Create the Project with a seller
+        ProjectDTO projectDTO = createProjectDto();
+        projectDTO.setSeller(sellerDTO);
+
+        // Simulate seller exists by mocking repository method
+        // Note: In a real test, you'd create an actual seller in the database
+
+        // Create project using the secure endpoint
+        restProjectMockMvc
+            .perform(
+                post("/api/projects/secure/create-by-seller")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(TestUtil.convertObjectToJsonBytes(projectDTO))
+            )
+            .andExpect(status().isCreated())
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON_VALUE))
+            .andExpect(jsonPath("$.id").isNotEmpty())
+            .andExpect(jsonPath("$.name").value(DEFAULT_NAME))
+            .andExpect(jsonPath("$.description").value(DEFAULT_DESCRIPTION))
+            .andExpect(jsonPath("$.startDate").value(DEFAULT_START_DATE.toString()));
+
+        // Validate the Project in the database
+        List<Project> projectList = projectRepository.findAll();
+        assertThat(projectList).hasSize(databaseSizeBeforeCreate + 1);
+        Project testProject = projectList.get(projectList.size() - 1);
+        assertThat(testProject.getName()).isEqualTo(DEFAULT_NAME);
+        assertThat(testProject.getDescription()).isEqualTo(DEFAULT_DESCRIPTION);
+        assertThat(testProject.getStartDate()).isEqualTo(DEFAULT_START_DATE);
+        assertThat(testProject.getSeller().getId()).isEqualTo(1L);
+    }
+
+    /**
+     * Test authorization - only sellers and admins should be able to create projects.
+     */
+    @Test
+    @Transactional
+    @WithMockUser(authorities = "ROLE_USER")
+    void createProjectSecureWithoutProperAuthority() throws Exception {
+        // Create a seller for this project
+        com.shaffaf.shaffafservice.service.dto.SellerDTO sellerDTO = new com.shaffaf.shaffafservice.service.dto.SellerDTO();
+        sellerDTO.setId(1L);
+
+        // Create the Project with a seller
+        ProjectDTO projectDTO = createProjectDto();
+        projectDTO.setSeller(sellerDTO);
+
+        // Attempt to create project without proper role
+        restProjectMockMvc
+            .perform(
+                post("/api/projects/secure/create-by-seller")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(TestUtil.convertObjectToJsonBytes(projectDTO))
+            )
+            .andExpect(status().isForbidden());
+    }
+
+    /**
+     * Test creating a project with admin role.
+     */
+    @Test
+    @Transactional
+    @WithMockUser(authorities = "ROLE_ADMIN")
+    void createProjectSecureWithAdminRole() throws Exception {
+        int databaseSizeBeforeCreate = projectRepository.findAll().size();
+
+        // Create a seller for this project
+        com.shaffaf.shaffafservice.service.dto.SellerDTO sellerDTO = new com.shaffaf.shaffafservice.service.dto.SellerDTO();
+        sellerDTO.setId(1L);
+
+        // Create the Project with a seller
+        ProjectDTO projectDTO = createProjectDto();
+        projectDTO.setSeller(sellerDTO);
+
+        // Create project with admin role
+        restProjectMockMvc
+            .perform(
+                post("/api/projects/secure/create-by-seller")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(TestUtil.convertObjectToJsonBytes(projectDTO))
+            )
+            .andExpect(status().isCreated())
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON_VALUE))
+            .andExpect(jsonPath("$.id").isNotEmpty());
+    }
+
+    /**
+     * Test validation - a project without a seller should fail.
+     */
+    @Test
+    @Transactional
+    @WithMockUser(authorities = "ROLE_SELLER")
+    void createProjectSecureWithoutSeller() throws Exception {
+        // Create the Project without a seller
+        ProjectDTO projectDTO = createProjectDto();
+        projectDTO.setSeller(null);
+
+        // Create project without a seller should fail with bad request
+        restProjectMockMvc
+            .perform(
+                post("/api/projects/secure/create-by-seller")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(TestUtil.convertObjectToJsonBytes(projectDTO))
+            )
+            .andExpect(status().isBadRequest());
+    }
+
+    /**
+     * Test creating a project with an existing ID should fail.
+     */
+    @Test
+    @Transactional
+    @WithMockUser(authorities = "ROLE_SELLER")
+    void createProjectSecureWithExistingId() throws Exception {
+        // Create a seller for this project
+        com.shaffaf.shaffafservice.service.dto.SellerDTO sellerDTO = new com.shaffaf.shaffafservice.service.dto.SellerDTO();
+        sellerDTO.setId(1L);
+
+        // Create the Project with an existing ID
+        ProjectDTO projectDTO = createProjectDto();
+        projectDTO.setId(1L); // Existing ID
+        projectDTO.setSeller(sellerDTO);
+
+        // Create project with existing ID should fail
+        restProjectMockMvc
+            .perform(
+                post("/api/projects/secure/create-by-seller")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(TestUtil.convertObjectToJsonBytes(projectDTO))
+            )
+            .andExpect(status().isBadRequest());
+    }
+
+    /**
+     * Helper method to create a basic ProjectDTO for testing.
+     */
+    private ProjectDTO createProjectDto() {
+        ProjectDTO projectDTO = new ProjectDTO();
+        projectDTO.setName(DEFAULT_NAME);
+        projectDTO.setDescription(DEFAULT_DESCRIPTION);
+        projectDTO.setStartDate(DEFAULT_START_DATE);
+        projectDTO.setEndDate(DEFAULT_END_DATE);
+        projectDTO.setStatus(DEFAULT_STATUS);
+        projectDTO.setFeesPerUnitPerMonth(DEFAULT_FEES_PER_UNIT_PER_MONTH);
+        projectDTO.setUnionHeadName(DEFAULT_UNION_HEAD_NAME);
+        projectDTO.setUnionHeadMobileNumber(DEFAULT_UNION_HEAD_MOBILE_NUMBER);
+        projectDTO.setNumberOfUnits(DEFAULT_NUMBER_OF_UNITS);
+        return projectDTO;
+    }
+
     protected long getRepositoryCount() {
         return projectRepository.count();
     }
@@ -676,5 +882,379 @@ class ProjectResourceIT {
 
     protected void assertPersistedProjectToMatchUpdatableProperties(Project expectedProject) {
         assertProjectAllUpdatablePropertiesEquals(expectedProject, getPersistedProject(expectedProject));
+    }
+
+    /**
+     * Test secure get project endpoint with ADMIN role - should access any project.
+     */
+    @Test
+    @Transactional
+    @WithMockUser(authorities = { AuthoritiesConstants.ADMIN, AuthoritiesConstants.USER })
+    void getProjectSecureAsAdmin() throws Exception {
+        // Initialize the database
+        projectRepository.saveAndFlush(project);
+
+        // Admin should be able to access any project
+        restProjectMockMvc
+            .perform(get("/api/projects/v1/secure/{id}", project.getId()))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON_VALUE))
+            .andExpect(jsonPath("$.id").value(project.getId().intValue()))
+            .andExpect(jsonPath("$.name").value(DEFAULT_NAME))
+            .andExpect(jsonPath("$.description").value(DEFAULT_DESCRIPTION));
+    }
+
+    /**
+     * Test secure get project endpoint with SELLER role - should only access own projects.
+     */
+    @Test
+    @Transactional
+    @WithMockUser(username = "+923001234567", authorities = { AuthoritiesConstants.SELLER, AuthoritiesConstants.USER })
+    void getProjectSecureAsSeller() throws Exception {
+        // Create a seller with matching phone number
+        com.shaffaf.shaffafservice.domain.Seller seller = new com.shaffaf.shaffafservice.domain.Seller()
+            .firstName("Test")
+            .lastName("Seller")
+            .email("test@example.com")
+            .phoneNumber("+923001234567")
+            .status(com.shaffaf.shaffafservice.domain.enumeration.Status.ACTIVE);
+
+        com.shaffaf.shaffafservice.repository.SellerRepository sellerRepository = applicationContext.getBean(
+            com.shaffaf.shaffafservice.repository.SellerRepository.class
+        );
+        seller = sellerRepository.saveAndFlush(seller);
+
+        // Set the seller in the project
+        project.setSeller(seller);
+        project = projectRepository.saveAndFlush(project);
+
+        // Seller should be able to access their own project
+        restProjectMockMvc
+            .perform(get("/api/projects/v1/secure/{id}", project.getId()))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON_VALUE))
+            .andExpect(jsonPath("$.id").value(project.getId().intValue()))
+            .andExpect(jsonPath("$.name").value(DEFAULT_NAME))
+            .andExpect(jsonPath("$.description").value(DEFAULT_DESCRIPTION))
+            .andExpect(jsonPath("$.seller.phoneNumber").value("+923001234567"));
+    }
+
+    /**
+     * Test secure get project endpoint with SELLER role - should not access other's projects.
+     */
+    @Test
+    @Transactional
+    @WithMockUser(username = "+923001234567", authorities = { AuthoritiesConstants.SELLER, AuthoritiesConstants.USER })
+    void getProjectSecureAsSellerNotOwner() throws Exception {
+        // Create a different seller
+        com.shaffaf.shaffafservice.domain.Seller differentSeller = new com.shaffaf.shaffafservice.domain.Seller()
+            .firstName("Different")
+            .lastName("Seller")
+            .email("different@example.com")
+            .phoneNumber("+923009876543")
+            .status(com.shaffaf.shaffafservice.domain.enumeration.Status.ACTIVE);
+
+        com.shaffaf.shaffafservice.repository.SellerRepository sellerRepository = applicationContext.getBean(
+            com.shaffaf.shaffafservice.repository.SellerRepository.class
+        );
+        differentSeller = sellerRepository.saveAndFlush(differentSeller);
+
+        // Set the different seller in the project
+        project.setSeller(differentSeller);
+        project = projectRepository.saveAndFlush(project);
+
+        // Current seller should not be able to access other seller's project
+        restProjectMockMvc.perform(get("/api/projects/v1/secure/{id}", project.getId())).andExpect(status().isNotFound());
+    }
+
+    /**
+     * Test secure get project endpoint without proper authority - should be forbidden.
+     */
+    @Test
+    @Transactional
+    @WithMockUser(authorities = AuthoritiesConstants.USER)
+    void getProjectSecureWithoutProperAuthority() throws Exception {
+        // Initialize the database
+        projectRepository.saveAndFlush(project);
+
+        // User without ADMIN or SELLER authority should be forbidden
+        restProjectMockMvc.perform(get("/api/projects/v1/secure/{id}", project.getId())).andExpect(status().isForbidden());
+    }
+
+    /**
+     * Test secure get project endpoint with non-existent project - should return not found.
+     */
+    @Test
+    @Transactional
+    @WithMockUser(authorities = { AuthoritiesConstants.ADMIN, AuthoritiesConstants.USER })
+    void getProjectSecureNotFound() throws Exception {
+        // Request a project that doesn't exist
+        restProjectMockMvc.perform(get("/api/projects/v1/secure/{id}", Long.MAX_VALUE)).andExpect(status().isNotFound());
+    }
+
+    /**
+     * Test secure get project endpoint with invalid phone number format for seller.
+     */
+    @Test
+    @Transactional
+    @WithMockUser(username = "invalidphone", authorities = { AuthoritiesConstants.SELLER, AuthoritiesConstants.USER })
+    void getProjectSecureWithInvalidPhoneNumber() throws Exception {
+        // Initialize the database
+        projectRepository.saveAndFlush(project);
+
+        // Seller with invalid phone number format should get bad request
+        restProjectMockMvc.perform(get("/api/projects/v1/secure/{id}", project.getId())).andExpect(status().isBadRequest());
+    }
+
+    /**
+     * Test secure get all projects endpoint - admin access.
+     */
+    @Test
+    @Transactional
+    @WithMockUser(username = "admin@example.com", authorities = { AuthoritiesConstants.ADMIN, AuthoritiesConstants.USER })
+    void getAllProjectsSecureAsAdmin() throws Exception {
+        // Initialize the database with multiple projects
+        projectRepository.saveAndFlush(project);
+
+        // Create a second project with different seller
+        Seller secondSeller = createSellerEntity();
+        secondSeller.setPhoneNumber("+923001234568");
+        secondSeller = sellerRepository.saveAndFlush(secondSeller);
+
+        Project secondProject = createProjectEntity();
+        secondProject.setName("Second Project");
+        secondProject.setSeller(secondSeller);
+        projectRepository.saveAndFlush(secondProject);
+
+        // Admin should be able to see all projects
+        restProjectMockMvc
+            .perform(get("/api/projects/v1/secure").param("page", "0").param("size", "10"))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON_VALUE))
+            .andExpect(jsonPath("$.content").isArray())
+            .andExpect(jsonPath("$.content.length()").value(2))
+            .andExpect(jsonPath("$.totalElements").value(2))
+            .andExpect(jsonPath("$.totalPages").value(1));
+    }
+
+    /**
+     * Test secure get all projects endpoint - seller access (own projects only).
+     */
+    @Test
+    @Transactional
+    @WithMockUser(username = "+923001234567", authorities = { AuthoritiesConstants.SELLER, AuthoritiesConstants.USER })
+    void getAllProjectsSecureAsSeller() throws Exception {
+        // Initialize the database
+        projectRepository.saveAndFlush(project);
+
+        // Create a second project with different seller
+        Seller secondSeller = createSellerEntity();
+        secondSeller.setPhoneNumber("+923001234568");
+        secondSeller = sellerRepository.saveAndFlush(secondSeller);
+
+        Project secondProject = createProjectEntity();
+        secondProject.setName("Second Project");
+        secondProject.setSeller(secondSeller);
+        projectRepository.saveAndFlush(secondProject); // Seller should only see their own project
+        restProjectMockMvc
+            .perform(get("/api/projects/v1/secure").param("page", "0").param("size", "10"))
+            .andExpect(status().isOk())
+            .andExpect(content().contentType(MediaType.APPLICATION_JSON_VALUE))
+            .andExpect(jsonPath("$.content").isArray())
+            .andExpect(jsonPath("$.content.length()").value(1))
+            .andExpect(jsonPath("$.totalElements").value(1))
+            .andExpect(jsonPath("$.content[0].name").value(DEFAULT_NAME));
+    }
+
+    /**
+     * Test secure get all projects endpoint with name filter.
+     */
+    @Test
+    @Transactional
+    @WithMockUser(username = "admin@example.com", authorities = { AuthoritiesConstants.ADMIN, AuthoritiesConstants.USER })
+    void getAllProjectsSecureWithNameFilter() throws Exception {
+        // Initialize the database with projects having different names
+        project.setName("Alpha Project");
+        projectRepository.saveAndFlush(project);
+
+        Seller secondSeller = createSellerEntity();
+        secondSeller.setPhoneNumber("+923001234568");
+        secondSeller = sellerRepository.saveAndFlush(secondSeller);
+
+        Project secondProject = createProjectEntity();
+        secondProject.setName("Beta Project");
+        secondProject.setSeller(secondSeller);
+        projectRepository.saveAndFlush(secondProject);
+
+        // Filter by name containing "Alpha"
+        restProjectMockMvc
+            .perform(get("/api/projects/v1/secure").param("nameFilter", "Alpha").param("page", "0").param("size", "10"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content.length()").value(1))
+            .andExpect(jsonPath("$.content[0].name").value("Alpha Project"));
+    }
+
+    /**
+     * Test secure get all projects endpoint with status filter.
+     */
+    @Test
+    @Transactional
+    @WithMockUser(username = "admin@example.com", authorities = { AuthoritiesConstants.ADMIN, AuthoritiesConstants.USER })
+    void getAllProjectsSecureWithStatusFilter() throws Exception {
+        // Initialize projects with different statuses
+        project.setStatus(Status.INACTIVE);
+        projectRepository.saveAndFlush(project);
+
+        Seller secondSeller = createSellerEntity();
+        secondSeller.setPhoneNumber("+923001234568");
+        secondSeller = sellerRepository.saveAndFlush(secondSeller);
+
+        Project secondProject = createProjectEntity();
+        secondProject.setStatus(Status.ACTIVE);
+        secondProject.setSeller(secondSeller);
+        projectRepository.saveAndFlush(secondProject);
+
+        // Filter by INACTIVE status
+        restProjectMockMvc
+            .perform(get("/api/projects/v1/secure").param("statusFilter", "INACTIVE").param("page", "0").param("size", "10"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content.length()").value(1))
+            .andExpect(jsonPath("$.content[0].status").value("INACTIVE"));
+    }
+
+    /**
+     * Test secure get all projects endpoint with seller name filter (admin only).
+     */
+    @Test
+    @Transactional
+    @WithMockUser(username = "admin@example.com", authorities = { AuthoritiesConstants.ADMIN, AuthoritiesConstants.USER })
+    void getAllProjectsSecureWithSellerNameFilter() throws Exception {
+        // Initialize the database
+        projectRepository.saveAndFlush(project);
+
+        // Create a second seller with different name
+        Seller secondSeller = createSellerEntity();
+        secondSeller.setFirstName("Jane");
+        secondSeller.setLastName("Smith");
+        secondSeller.setPhoneNumber("+923001234568");
+        secondSeller = sellerRepository.saveAndFlush(secondSeller);
+
+        Project secondProject = createProjectEntity();
+        secondProject.setSeller(secondSeller);
+        projectRepository.saveAndFlush(secondProject);
+
+        // Filter by seller name
+        restProjectMockMvc
+            .perform(get("/api/projects/v1/secure").param("sellerNameFilter", "Jane").param("page", "0").param("size", "10"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content.length()").value(1))
+            .andExpect(jsonPath("$.content[0].seller.firstName").value("Jane"));
+    }
+
+    /**
+     * Test secure get all projects endpoint with pagination.
+     */
+    @Test
+    @Transactional
+    @WithMockUser(username = "admin@example.com", authorities = { AuthoritiesConstants.ADMIN, AuthoritiesConstants.USER })
+    void getAllProjectsSecureWithPagination() throws Exception {
+        // Create multiple projects
+        for (int i = 0; i < 5; i++) {
+            Project testProject = createProjectEntity();
+            testProject.setName("Project " + i);
+            projectRepository.saveAndFlush(testProject);
+        }
+
+        // Request first page with size 2
+        restProjectMockMvc
+            .perform(get("/api/projects/v1/secure").param("page", "0").param("size", "2"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content.length()").value(2))
+            .andExpect(jsonPath("$.totalElements").value(5))
+            .andExpect(jsonPath("$.totalPages").value(3))
+            .andExpect(jsonPath("$.first").value(true))
+            .andExpect(jsonPath("$.last").value(false));
+
+        // Request second page
+        restProjectMockMvc
+            .perform(get("/api/projects/v1/secure").param("page", "1").param("size", "2"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content.length()").value(2))
+            .andExpect(jsonPath("$.first").value(false))
+            .andExpect(jsonPath("$.last").value(false));
+    }
+
+    /**
+     * Test secure get all projects endpoint without proper authority - should be forbidden.
+     */
+    @Test
+    @Transactional
+    @WithMockUser(authorities = AuthoritiesConstants.USER)
+    void getAllProjectsSecureWithoutProperAuthority() throws Exception {
+        // User without ADMIN or SELLER authority should be forbidden
+        restProjectMockMvc.perform(get("/api/projects/v1/secure")).andExpect(status().isForbidden());
+    }
+
+    /**
+     * Test secure get all projects endpoint with invalid pagination parameters.
+     */
+    @Test
+    @Transactional
+    @WithMockUser(username = "admin@example.com", authorities = { AuthoritiesConstants.ADMIN, AuthoritiesConstants.USER })
+    void getAllProjectsSecureWithInvalidPagination() throws Exception {
+        // Test negative page number
+        restProjectMockMvc
+            .perform(get("/api/projects/v1/secure").param("page", "-1").param("size", "10"))
+            .andExpect(status().isBadRequest());
+
+        // Test invalid page size (too large)
+        restProjectMockMvc
+            .perform(get("/api/projects/v1/secure").param("page", "0").param("size", "101"))
+            .andExpect(status().isBadRequest());
+
+        // Test invalid page size (zero)
+        restProjectMockMvc.perform(get("/api/projects/v1/secure").param("page", "0").param("size", "0")).andExpect(status().isBadRequest());
+    }
+
+    /**
+     * Test secure get all projects endpoint with invalid phone number format for seller.
+     */
+    @Test
+    @Transactional
+    @WithMockUser(username = "invalidphone", authorities = { AuthoritiesConstants.SELLER, AuthoritiesConstants.USER })
+    void getAllProjectsSecureWithInvalidPhoneNumber() throws Exception {
+        // Seller with invalid phone number format should get bad request
+        restProjectMockMvc.perform(get("/api/projects/v1/secure")).andExpect(status().isBadRequest());
+    }
+
+    /**
+     * Test secure get all projects endpoint - seller ignores sellerNameFilter.
+     */
+    @Test
+    @Transactional
+    @WithMockUser(username = "+923001234567", authorities = { AuthoritiesConstants.SELLER, AuthoritiesConstants.USER })
+    void getAllProjectsSecureSellerIgnoresSellerFilter() throws Exception {
+        // Initialize the database
+        projectRepository.saveAndFlush(project);
+
+        // Create another project with different seller
+        Seller secondSeller = createSellerEntity();
+        secondSeller.setFirstName("Jane");
+        secondSeller.setPhoneNumber("+923001234568");
+        secondSeller = sellerRepository.saveAndFlush(secondSeller);
+
+        Project secondProject = createProjectEntity();
+        secondProject.setSeller(secondSeller);
+        projectRepository.saveAndFlush(secondProject); // Seller should only see their own project, regardless of sellerNameFilter
+        restProjectMockMvc
+            .perform(
+                get("/api/projects/v1/secure")
+                    .param("sellerNameFilter", "Jane") // This should be ignored for sellers
+                    .param("page", "0")
+                    .param("size", "10")
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content.length()").value(1))
+            .andExpect(jsonPath("$.content[0].seller.firstName").value(DEFAULT_FIRST_NAME)); // Should get own project
     }
 }

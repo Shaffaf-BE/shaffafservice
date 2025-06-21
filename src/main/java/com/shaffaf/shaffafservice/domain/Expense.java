@@ -22,7 +22,7 @@ public class Expense implements Serializable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sequenceGenerator")
-    @SequenceGenerator(name = "sequenceGenerator")
+    @SequenceGenerator(name = "sequenceGenerator", sequenceName = "expense_seq")
     @Column(name = "id")
     private Long id;
 
