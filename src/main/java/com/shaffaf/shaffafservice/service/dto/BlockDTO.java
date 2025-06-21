@@ -14,6 +14,9 @@ public class BlockDTO implements Serializable {
     private Long id;
 
     @NotNull
+    @Pattern(regexp = "^[a-zA-Z0-9\\s]+$", message = "Name must contain only alphanumeric characters and spaces")
+    @Size(min = 1, message = "Name must not be empty")
+    @Size(max = 255, message = "Name must not exceed 255 characters")
     private String name;
 
     private String createdBy;
@@ -26,6 +29,7 @@ public class BlockDTO implements Serializable {
 
     private Instant deletedOn;
 
+    @NotNull
     private ProjectDTO project;
 
     public Long getId() {

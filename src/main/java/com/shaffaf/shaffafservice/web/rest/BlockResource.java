@@ -1,8 +1,14 @@
 package com.shaffaf.shaffafservice.web.rest;
 
 import com.shaffaf.shaffafservice.repository.BlockRepository;
+import com.shaffaf.shaffafservice.repository.JdbcTemplate.ProjectJdbcRepository;
+import com.shaffaf.shaffafservice.repository.JdbcTemplate.SellerJdbcRepository;
+import com.shaffaf.shaffafservice.repository.JdbcTemplate.UnionMemberJdbcRepository;
+import com.shaffaf.shaffafservice.security.AuthoritiesConstants;
+import com.shaffaf.shaffafservice.security.SecurityUtils;
 import com.shaffaf.shaffafservice.service.BlockService;
 import com.shaffaf.shaffafservice.service.dto.BlockDTO;
+import com.shaffaf.shaffafservice.util.PhoneNumberUtil;
 import com.shaffaf.shaffafservice.web.rest.errors.BadRequestAlertException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -17,8 +23,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import tech.jhipster.web.util.HeaderUtil;
 import tech.jhipster.web.util.PaginationUtil;
@@ -28,7 +37,7 @@ import tech.jhipster.web.util.ResponseUtil;
  * REST controller for managing {@link com.shaffaf.shaffafservice.domain.Block}.
  */
 @RestController
-@RequestMapping("/api/blocks")
+@RequestMapping("/api/blocks/v1")
 public class BlockResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(BlockResource.class);
@@ -42,9 +51,24 @@ public class BlockResource {
 
     private final BlockRepository blockRepository;
 
-    public BlockResource(BlockService blockService, BlockRepository blockRepository) {
+    private final ProjectJdbcRepository projectJdbcRepository;
+
+    private final SellerJdbcRepository sellerJdbcRepository;
+
+    private final UnionMemberJdbcRepository unionMemberJdbcRepository;
+
+    public BlockResource(
+        BlockService blockService,
+        BlockRepository blockRepository,
+        ProjectJdbcRepository projectJdbcRepository,
+        SellerJdbcRepository sellerJdbcRepository,
+        UnionMemberJdbcRepository unionMemberJdbcRepository
+    ) {
         this.blockService = blockService;
         this.blockRepository = blockRepository;
+        this.projectJdbcRepository = projectJdbcRepository;
+        this.sellerJdbcRepository = sellerJdbcRepository;
+        this.unionMemberJdbcRepository = unionMemberJdbcRepository;
     }
 
     /**
@@ -55,13 +79,70 @@ public class BlockResource {
      * @throws URISyntaxException if the Location URI syntax is incorrect.
      */
     @PostMapping("")
+    @PreAuthorize(
+        "hasAnyAuthority(" +
+        "\"" +
+        AuthoritiesConstants.ADMIN +
+        "\", " +
+        "\"" +
+        AuthoritiesConstants.SELLER +
+        "\", " +
+        "\"" +
+        AuthoritiesConstants.UNION_HEAD +
+        "\"" +
+        ")"
+    )
     public ResponseEntity<BlockDTO> createBlock(@Valid @RequestBody BlockDTO blockDTO) throws URISyntaxException {
         LOG.debug("REST request to save Block : {}", blockDTO);
         if (blockDTO.getId() != null) {
             throw new BadRequestAlertException("A new block cannot already have an ID", ENTITY_NAME, "idexists");
         }
+
+        if (blockDTO.getProject() == null || blockDTO.getProject().getId() == null) {
+            throw new BadRequestAlertException("Project ID must be provided", ENTITY_NAME, "projectidnull");
+        }
+
+        String currentUserLogin = SecurityUtils.getCurrentUserLogin()
+            .orElseThrow(() ->
+                new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Current user not found. Please ensure you are properly authenticated."
+                )
+            );
+
+        String phoneNumber = PhoneNumberUtil.normalize(currentUserLogin);
+
+        if (!PhoneNumberUtil.isValidPakistaniMobile(phoneNumber)) {
+            throw new BadRequestAlertException("Invalid phone number format", ENTITY_NAME, "invalidphonenumber");
+        }
+
+        // Check if the current user is authorized to create a block
+        // Admins can create blocks for any project, no additional checks needed
+        // If the user is a union head, they can create blocks for their own projects
+        if (
+            SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.UNION_HEAD) &&
+            !SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.ADMIN)
+        ) {
+            if (!unionMemberJdbcRepository.isUnionMemberAssociatedWithProject(blockDTO.getProject().getId(), phoneNumber)) {
+                throw new BadRequestAlertException(
+                    "Union heads can only create blocks for their own projects",
+                    ENTITY_NAME,
+                    "unauthorized"
+                );
+            }
+        }
+        // If the Seller is the current user, they can only create blocks for their associate project
+        if (
+            SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.SELLER) &&
+            !SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.ADMIN)
+        ) {
+            if (!sellerJdbcRepository.isSellerAssociatedWithProject(blockDTO.getProject().getId(), phoneNumber)) {
+                throw new BadRequestAlertException("Sellers can only create blocks for their own projects", ENTITY_NAME, "unauthorized");
+            }
+        }
+
         blockDTO = blockService.save(blockDTO);
-        return ResponseEntity.created(new URI("/api/blocks/" + blockDTO.getId()))
+        return ResponseEntity.created(new URI("/api/blocks/v1" + blockDTO.getId()))
             .headers(HeaderUtil.createEntityCreationAlert(applicationName, true, ENTITY_NAME, blockDTO.getId().toString()))
             .body(blockDTO);
     }
@@ -136,15 +217,15 @@ public class BlockResource {
     }
 
     /**
-     * {@code GET  /blocks} : get all the blocks.
+     * {@code GET  /blocks/projects/{projectId}} : get all the blocks by ProjectId.
      *
      * @param pageable the pagination information.
      * @return the {@link ResponseEntity} with status {@code 200 (OK)} and the list of blocks in body.
      */
-    @GetMapping("")
-    public ResponseEntity<List<BlockDTO>> getAllBlocks(@org.springdoc.core.annotations.ParameterObject Pageable pageable) {
-        LOG.debug("REST request to get a page of Blocks");
-        Page<BlockDTO> page = blockService.findAll(pageable);
+    @GetMapping("/projects/{projectId}")
+    public ResponseEntity<List<BlockDTO>> getAllBlocks(@PathVariable("projectId") Long projectId, Pageable pageable) {
+        LOG.debug("REST request to get a page of Blocks By ProjectId");
+        Page<BlockDTO> page = blockService.findAllByProjectId(projectId, pageable);
         HttpHeaders headers = PaginationUtil.generatePaginationHttpHeaders(ServletUriComponentsBuilder.fromCurrentRequest(), page);
         return ResponseEntity.ok().headers(headers).body(page.getContent());
     }

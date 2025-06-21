@@ -1,5 +1,6 @@
 package com.shaffaf.shaffafservice.service;
 
+import com.shaffaf.shaffafservice.domain.Block;
 import com.shaffaf.shaffafservice.service.dto.BlockDTO;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -48,6 +49,15 @@ public interface BlockService {
      * @return the entity.
      */
     Optional<BlockDTO> findOne(Long id);
+
+    /**
+     * Get all blocks by project ID.
+     *
+     * @param projectId the ID of the project.
+     * @param pageable the pagination information.
+     * @return the list of entities.
+     */
+    Page<BlockDTO> findAllByProjectId(Long projectId, Pageable pageable);
 
     /**
      * Delete the "id" block.
