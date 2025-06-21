@@ -86,13 +86,23 @@ class PhoneNumberUtilTest {
 
     @Test
     void testUtilityClassCannotBeInstantiated() {
-        // Verify that the utility class cannot be instantiated
-        assertThrows(UnsupportedOperationException.class, () -> {
-            // Use reflection to try to call the private constructor
+        // Verify that the utility class cannot be instantiated using reflection
+        try {
             var constructor = PhoneNumberUtil.class.getDeclaredConstructor();
             constructor.setAccessible(true);
             constructor.newInstance();
-        });
+            fail("Expected exception when trying to instantiate utility class");
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            // InvocationTargetException wraps the actual exception thrown by the constructor
+            Throwable cause = e.getCause();
+            assertTrue(
+                cause instanceof UnsupportedOperationException,
+                "Expected UnsupportedOperationException but got: " + cause.getClass().getSimpleName()
+            );
+            assertEquals("Utility class cannot be instantiated", cause.getMessage());
+        } catch (Exception e) {
+            fail("Unexpected exception type: " + e.getClass().getSimpleName() + " - " + e.getMessage());
+        }
     }
 
     @Test

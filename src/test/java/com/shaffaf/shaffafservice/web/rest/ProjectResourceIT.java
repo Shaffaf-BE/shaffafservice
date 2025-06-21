@@ -11,8 +11,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.shaffaf.shaffafservice.IntegrationTest;
 import com.shaffaf.shaffafservice.domain.Project;
+import com.shaffaf.shaffafservice.domain.Seller;
 import com.shaffaf.shaffafservice.domain.enumeration.Status;
 import com.shaffaf.shaffafservice.repository.ProjectRepository;
+import com.shaffaf.shaffafservice.repository.SellerRepository;
 import com.shaffaf.shaffafservice.security.AuthoritiesConstants;
 import com.shaffaf.shaffafservice.service.dto.ProjectDTO;
 import com.shaffaf.shaffafservice.service.mapper.ProjectMapper;
@@ -67,7 +69,6 @@ class ProjectResourceIT {
 
     private static final String DEFAULT_UNION_HEAD_MOBILE_NUMBER = "AAAAAAAAAA";
     private static final String UPDATED_UNION_HEAD_MOBILE_NUMBER = "BBBBBBBBBB";
-
     private static final Integer DEFAULT_NUMBER_OF_UNITS = 1;
     private static final Integer UPDATED_NUMBER_OF_UNITS = 2;
 
@@ -92,6 +93,12 @@ class ProjectResourceIT {
     private static final Instant DEFAULT_DELETED_DATE = Instant.ofEpochMilli(0L);
     private static final Instant UPDATED_DELETED_DATE = Instant.now().truncatedTo(ChronoUnit.MILLIS);
 
+    // Seller constants for testing
+    private static final String DEFAULT_FIRST_NAME = "John";
+    private static final String DEFAULT_LAST_NAME = "Doe";
+    private static final String DEFAULT_SELLER_EMAIL = "john.doe@example.com";
+    private static final String DEFAULT_SELLER_PHONE = "+923001234567";
+
     private static final String ENTITY_API_URL = "/api/projects";
     private static final String ENTITY_API_URL_ID = ENTITY_API_URL + "/{id}";
 
@@ -103,6 +110,9 @@ class ProjectResourceIT {
 
     @Autowired
     private ProjectRepository projectRepository;
+
+    @Autowired
+    private SellerRepository sellerRepository;
 
     @Autowired
     private ProjectMapper projectMapper;
@@ -170,6 +180,34 @@ class ProjectResourceIT {
             .lastModifiedBy(UPDATED_LAST_MODIFIED_BY)
             .lastModifiedDate(UPDATED_LAST_MODIFIED_DATE)
             .deletedDate(UPDATED_DELETED_DATE);
+    }
+
+    /**
+     * Create a Seller entity for testing.
+     */
+    public static Seller createSellerEntity() {
+        Seller seller = new Seller();
+        seller.setFirstName(DEFAULT_FIRST_NAME);
+        seller.setLastName(DEFAULT_LAST_NAME);
+        seller.setEmail(DEFAULT_SELLER_EMAIL);
+        seller.setPhoneNumber(DEFAULT_SELLER_PHONE);
+        seller.setStatus(Status.ACTIVE);
+        return seller;
+    }
+
+    /**
+     * Create a Project entity with a seller for testing.
+     */
+    public Project createProjectEntity() {
+        Project project = createEntity();
+
+        // Create and save a seller first
+        Seller seller = createSellerEntity();
+        seller = sellerRepository.saveAndFlush(seller);
+
+        // Set the seller in the project
+        project.setSeller(seller);
+        return project;
     }
 
     @BeforeEach
@@ -1064,7 +1102,7 @@ class ProjectResourceIT {
     @WithMockUser(username = "admin@example.com", authorities = { AuthoritiesConstants.ADMIN, AuthoritiesConstants.USER })
     void getAllProjectsSecureWithStatusFilter() throws Exception {
         // Initialize projects with different statuses
-        project.setStatus(Status.PENDING);
+        project.setStatus(Status.INACTIVE);
         projectRepository.saveAndFlush(project);
 
         Seller secondSeller = createSellerEntity();
@@ -1076,12 +1114,12 @@ class ProjectResourceIT {
         secondProject.setSeller(secondSeller);
         projectRepository.saveAndFlush(secondProject);
 
-        // Filter by PENDING status
+        // Filter by INACTIVE status
         restProjectMockMvc
-            .perform(get("/api/projects/v1/secure").param("statusFilter", "PENDING").param("page", "0").param("size", "10"))
+            .perform(get("/api/projects/v1/secure").param("statusFilter", "INACTIVE").param("page", "0").param("size", "10"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.content.length()").value(1))
-            .andExpect(jsonPath("$.content[0].status").value("PENDING"));
+            .andExpect(jsonPath("$.content[0].status").value("INACTIVE"));
     }
 
     /**

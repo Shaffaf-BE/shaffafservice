@@ -205,10 +205,14 @@ public class ProjectResource {
     @PostMapping("/secure/create-by-seller")
     @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.SELLER + "\") or hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
     public ResponseEntity<ProjectDTO> createProjectSecure(@Valid @RequestBody ProjectDTO projectDTO) throws URISyntaxException {
-        LOG.debug("REST request to securely create Project by seller: {}", projectDTO); // Check for ID - a new entity shouldn't have one
+        LOG.debug("REST request to securely create Project by seller: {}", projectDTO);
+
+        // Check for ID - a new entity shouldn't have one
         if (projectDTO.getId() != null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A new project cannot already have an ID");
-        } // Get current authenticated username (mobile number) for seller identification
+        }
+
+        // Get current authenticated username (mobile number) for seller identification
         String currentUsername = SecurityUtils.getCurrentUserLogin()
             .orElseThrow(() ->
                 new ResponseStatusException(
@@ -216,6 +220,7 @@ public class ProjectResource {
                     "Current user not found. Please ensure you are properly authenticated."
                 )
             );
+
         LOG.debug("Attempting to validate authenticated user: {}", currentUsername);
 
         // Normalize the phone number to handle various formats (local, international, etc.)
@@ -234,7 +239,9 @@ public class ProjectResource {
             );
             LOG.warn("Phone validation failed for user: '{}' (normalized: '{}')", currentUsername, normalizedPhone);
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, errorMessage);
-        } // Find seller by mobile number (using normalized phone number)
+        }
+
+        // Find seller by mobile number (using normalized phone number)
         Optional<Seller> sellerOptional = sellerRepository.findByPhoneNumber(normalizedPhone);
         if (sellerOptional.isEmpty()) {
             String errorMessage = String.format(
@@ -248,7 +255,9 @@ public class ProjectResource {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, errorMessage);
         }
 
-        Seller authenticatedSeller = sellerOptional.get();
+        Seller authenticatedSeller = sellerOptional.orElseThrow(() ->
+            new ResponseStatusException(HttpStatus.BAD_REQUEST, String.format("Seller not found for mobile number: %s", normalizedPhone))
+        );
 
         // Set the seller in the project DTO based on authenticated user
         SellerDTO sellerDTO = new SellerDTO();
@@ -259,7 +268,9 @@ public class ProjectResource {
         projectDTO.setSeller(sellerDTO);
 
         // Sanitize and validate input fields to prevent injection attacks
-        sanitizeProjectInputs(projectDTO); // Apply rate limiting to prevent abuse
+        sanitizeProjectInputs(projectDTO);
+
+        // Apply rate limiting to prevent abuse
         if (isRateLimitExceeded()) {
             LOG.warn("Rate limit exceeded for project creation by seller: {} (normalized: {})", currentUsername, normalizedPhone);
             return ResponseEntity.status(429).build(); // Too Many Requests
@@ -406,7 +417,6 @@ public class ProjectResource {
         if (projectDTO.getId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Project ID is required in the request body to update a project");
         }
-
         Long projectId = projectDTO.getId();
 
         // Get current authenticated username (mobile number) for seller identification
@@ -452,7 +462,9 @@ public class ProjectResource {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, errorMessage);
         }
 
-        Seller authenticatedSeller = sellerOptional.get();
+        Seller authenticatedSeller = sellerOptional.orElseThrow(() ->
+            new ResponseStatusException(HttpStatus.BAD_REQUEST, String.format("Seller not found for mobile number: %s", normalizedPhone))
+        );
 
         // Check if the project exists and get its current details
         Optional<ProjectDTO> existingProjectOptional = projectService.findOne(projectId);
@@ -464,7 +476,12 @@ public class ProjectResource {
             );
         }
 
-        ProjectDTO existingProject = existingProjectOptional.get();
+        ProjectDTO existingProject = existingProjectOptional.orElseThrow(() ->
+            new ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "Project not found with ID: " + projectId + ". Please verify the project ID and try again."
+            )
+        );
 
         // Check if the authenticated seller is the owner of the project or if user is admin
         boolean isAdmin = SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.ADMIN);
@@ -541,7 +558,10 @@ public class ProjectResource {
 
             if (projectDTO.isPresent()) {
                 LOG.info("Project {} retrieved successfully by user '{}' (Admin: {})", id, currentUsername, isAdmin);
-                return ResponseEntity.ok().body(projectDTO.get());
+                return ResponseEntity.ok()
+                    .body(
+                        projectDTO.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found with ID: " + id))
+                    );
             } else {
                 LOG.warn("Project {} not found or not accessible for user '{}' (Admin: {})", id, currentUsername, isAdmin);
                 return ResponseEntity.notFound().build();
