@@ -30,6 +30,6 @@ spring:
       port: 8500
   docker:
     compose:
-      enabled: true
-      lifecycle-management: start-only
-      file: src/main/docker/postgresql.yml
+      enabled: false
+#      lifecycle-management: start-only
+#      file: src/main/docker/services.yml
