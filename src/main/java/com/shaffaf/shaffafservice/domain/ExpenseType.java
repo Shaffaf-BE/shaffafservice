@@ -23,7 +23,7 @@ public class ExpenseType implements Serializable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sequenceGenerator")
-    @SequenceGenerator(name = "sequenceGenerator")
+    @SequenceGenerator(name = "sequenceGenerator", sequenceName = "expense_type_seq")
     @Column(name = "id")
     private Long id;
 

@@ -6,6 +6,7 @@ import com.shaffaf.shaffafservice.repository.SellerRepository;
 import com.shaffaf.shaffafservice.service.SellerService;
 import com.shaffaf.shaffafservice.service.dto.SellerDTO;
 import com.shaffaf.shaffafservice.service.mapper.SellerMapper;
+import com.shaffaf.shaffafservice.util.PhoneNumberUtil;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -134,12 +135,10 @@ public class SellerServiceImpl implements SellerService {
         if (!sellerRepository.existsById(sellerDTO.getId())) {
             LOG.error("Seller with ID {} does not exist", sellerDTO.getId());
             throw new IllegalArgumentException("Seller not found with ID: " + sellerDTO.getId());
-        }
-
-        // Validate phone number format
-        if (sellerDTO.getPhoneNumber() != null && !sellerDTO.getPhoneNumber().matches("^\\+[0-9]{11,12}$")) {
+        } // Validate phone number format
+        if (sellerDTO.getPhoneNumber() != null && !PhoneNumberUtil.isValidPakistaniMobile(sellerDTO.getPhoneNumber())) {
             LOG.error("Invalid phone number format: {}", sellerDTO.getPhoneNumber());
-            throw new IllegalArgumentException("Phone number must be in format +923311234569");
+            throw new IllegalArgumentException(PhoneNumberUtil.INVALID_PHONE_ERROR_MESSAGE);
         }
 
         // Sanitize inputs

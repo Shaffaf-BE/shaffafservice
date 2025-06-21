@@ -21,7 +21,7 @@ public class ComplainComment implements Serializable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sequenceGenerator")
-    @SequenceGenerator(name = "sequenceGenerator")
+    @SequenceGenerator(name = "sequenceGenerator", sequenceName = "complain_comment_seq")
     @Column(name = "id")
     private Long id;
 

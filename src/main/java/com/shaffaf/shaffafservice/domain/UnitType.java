@@ -23,7 +23,7 @@ public class UnitType implements Serializable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "sequenceGenerator")
-    @SequenceGenerator(name = "sequenceGenerator")
+    @SequenceGenerator(name = "sequenceGenerator", sequenceName = "unit_type_seq")
     @Column(name = "id")
     private Long id;
 

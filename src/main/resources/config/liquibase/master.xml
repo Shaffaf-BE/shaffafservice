@@ -50,6 +50,6 @@
     <include file="config/liquibase/changelog/20250601084307_added_entity_constraints_Unit.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20250601084309_added_entity_constraints_Resident.xml" relativeToChangelogFile="false"/>
     <!-- jhipster-needle-liquibase-add-constraints-changelog - JHipster will add liquibase constraints changelogs here -->
-    <include file="config/liquibase/changelog/20250615000001_add_seller_sequence.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20250621000000_added_entity_sequences.xml" relativeToChangelogFile="false"/>
     <!-- jhipster-needle-liquibase-add-incremental-changelog - JHipster will add incremental liquibase changelogs here -->
 </databaseChangeLog>

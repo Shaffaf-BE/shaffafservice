@@ -55,4 +55,15 @@ public interface ProjectService {
      * @param id the id of the entity.
      */
     void delete(Long id);
+
+    /**
+     * Create a new project using native SQL for better performance and security.
+     * This method is specifically designed for sellers to create projects.
+     *
+     * @param projectDTO the project to create, with seller information
+     * @param username the username of the currently authenticated user
+     * @return the created ProjectDTO with ID
+     * @throws IllegalArgumentException if validation fails
+     */
+    ProjectDTO createProjectNative(ProjectDTO projectDTO, String username);
 }

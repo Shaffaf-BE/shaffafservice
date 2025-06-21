@@ -116,4 +116,20 @@ public interface SellerRepository extends JpaRepository<Seller, Long> {
         @Param("lastModifiedBy") String lastModifiedBy,
         @Param("lastModifiedDate") Instant lastModifiedDate
     );
+
+    /**
+     * Find a seller by phone number using native SQL query.
+     * This is used for authentication when sellers use their mobile number as user ID.
+     *
+     * @param phoneNumber the phone number of the seller
+     * @return An Optional containing the Seller entity, or empty if not found
+     */
+    @Query(
+        value = "SELECT s.* FROM seller s " +
+        "WHERE s.phone_number = :phoneNumber " +
+        "AND s.deleted_on IS NULL " +
+        "AND s.status = 'ACTIVE'",
+        nativeQuery = true
+    )
+    Optional<Seller> findByPhoneNumber(@Param("phoneNumber") String phoneNumber);
 }

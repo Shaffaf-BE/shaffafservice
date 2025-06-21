@@ -4,6 +4,7 @@ import com.shaffaf.shaffafservice.repository.SellerRepository;
 import com.shaffaf.shaffafservice.security.AuthoritiesConstants;
 import com.shaffaf.shaffafservice.service.SellerService;
 import com.shaffaf.shaffafservice.service.dto.SellerDTO;
+import com.shaffaf.shaffafservice.util.PhoneNumberUtil;
 import com.shaffaf.shaffafservice.web.rest.errors.BadRequestAlertException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -161,8 +162,8 @@ public class SellerResource {
         }
 
         // Validate phone number format
-        if (sellerDTO.getPhoneNumber() != null && !sellerDTO.getPhoneNumber().matches("^\\+[0-9]{11,12}$")) {
-            throw new BadRequestAlertException("Phone number must be in format +923311234569", ENTITY_NAME, "invalidphone");
+        if (sellerDTO.getPhoneNumber() != null && !PhoneNumberUtil.isValidPakistaniMobile(sellerDTO.getPhoneNumber())) {
+            throw new BadRequestAlertException(PhoneNumberUtil.INVALID_PHONE_ERROR_MESSAGE, ENTITY_NAME, "invalidphone");
         }
 
         // Apply rate limiting check
@@ -202,8 +203,8 @@ public class SellerResource {
         }
 
         // Validate phone number format
-        if (sellerDTO.getPhoneNumber() != null && !sellerDTO.getPhoneNumber().matches("^\\+[0-9]{11,12}$")) {
-            throw new BadRequestAlertException("Phone number must be in format +923311234569", ENTITY_NAME, "invalidphone");
+        if (sellerDTO.getPhoneNumber() != null && !PhoneNumberUtil.isValidPakistaniMobile(sellerDTO.getPhoneNumber())) {
+            throw new BadRequestAlertException(PhoneNumberUtil.INVALID_PHONE_ERROR_MESSAGE, ENTITY_NAME, "invalidphone");
         }
 
         // Apply rate limiting check to prevent abuse

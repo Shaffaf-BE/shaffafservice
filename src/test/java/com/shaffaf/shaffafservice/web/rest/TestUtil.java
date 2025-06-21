@@ -2,11 +2,15 @@ package com.shaffaf.shaffafservice.web.rest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Root;
+import java.io.IOException;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.time.ZonedDateTime;
@@ -196,6 +200,20 @@ public final class TestUtil {
             }
         );
         return (T) e.create();
+    }
+
+    /**
+     * Convert an object to JSON byte array.
+     *
+     * @param object the object to convert.
+     * @return the JSON byte array.
+     * @throws IOException if conversion fails.
+     */
+    public static byte[] convertObjectToJsonBytes(Object object) throws IOException {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.setSerializationInclusion(JsonInclude.Include.NON_EMPTY);
+        mapper.registerModule(new JavaTimeModule());
+        return mapper.writeValueAsBytes(object);
     }
 
     private TestUtil() {}
