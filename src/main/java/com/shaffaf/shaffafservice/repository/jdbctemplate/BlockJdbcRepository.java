@@ -1,7 +1,10 @@
-package com.shaffaf.shaffafservice.repository.JdbcTemplate;
+package com.shaffaf.shaffafservice.repository.jdbctemplate;
 
 import com.shaffaf.shaffafservice.domain.Block;
 import com.shaffaf.shaffafservice.domain.Project;
+import com.shaffaf.shaffafservice.repository.jdbctemplate.rowmapper.BlockRowMapper;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -28,36 +31,35 @@ public class BlockJdbcRepository {
         return jdbcTemplate.queryForObject(sql, Long.class, blockName, projectId, username, username);
     }
 
+    public void updateBlock(Long blockId, String blockName, Long projectId, String username, Instant deletedOn) {
+        String sql =
+            """
+                UPDATE block b
+                SET name = ?,
+                    project_id = ?,
+                    deleted_on = ?,
+                    last_modified_by = ?,
+                    last_modified_date = now()
+                WHERE b.id = ?
+            """;
+        jdbcTemplate.update(sql, blockName, projectId, deletedOn != null ? Timestamp.from(deletedOn) : null, username, blockId);
+    }
+
     public Optional<Block> findById(Long id) {
-        String sql = "SELECT * FROM block WHERE id = ? AND deleted_on IS NULL";
+        String sql = "SELECT * FROM block WHERE id = ? AND (deleted_on IS NULL OR deleted_on > now())";
 
-        return jdbcTemplate
-            .query(
-                sql,
-                (rs, rowNum) -> {
-                    Block block = new Block();
-                    block.setId(rs.getLong("id"));
-                    block.setName(rs.getString("name"));
-
-                    Project project = new Project();
-                    project.setId(rs.getLong("project_id"));
-
-                    block.setProject(project);
-                    return block;
-                },
-                id
-            )
-            .stream()
-            .findFirst();
+        return jdbcTemplate.query(sql, new BlockRowMapper(), id).stream().findFirst();
     }
 
     public Page<Block> findAllByProjectId(Long projectId, Pageable pageable) {
         // First, get total count for pagination metadata
-        String countSql = "SELECT COUNT(*) FROM block WHERE project_id = ? AND deleted_on IS NULL";
+        String countSql = "SELECT COUNT(*) FROM block WHERE project_id = ? AND (deleted_on IS NULL OR deleted_on > now())";
         Integer totalItems = jdbcTemplate.queryForObject(countSql, Integer.class, projectId);
 
         // Build the SQL query with sorting
-        StringBuilder sqlBuilder = new StringBuilder("SELECT * FROM block WHERE project_id = ? AND deleted_on IS NULL");
+        StringBuilder sqlBuilder = new StringBuilder(
+            "SELECT * FROM block WHERE project_id = ? AND (deleted_on IS NULL OR deleted_on > now())"
+        );
 
         // Handle sorting
         if (pageable.getSort().isSorted()) {
@@ -84,23 +86,25 @@ public class BlockJdbcRepository {
 
         List<Block> blocks = jdbcTemplate.query(
             sqlBuilder.toString(),
-            (rs, rowNum) -> {
-                Block block = new Block();
-                block.setId(rs.getLong("id"));
-                block.setName(rs.getString("name"));
-
-                Project project = new Project();
-                project.setId(rs.getLong("project_id"));
-
-                block.setProject(project);
-                return block;
-            },
+            new BlockRowMapper(),
             projectId,
             pageable.getPageSize(),
             pageable.getOffset()
         );
 
         return new PageImpl<>(blocks, pageable, totalItems != null ? totalItems : 0);
+    }
+
+    public Boolean existsById(Long id) {
+        String sql =
+            """
+                SELECT CASE WHEN COUNT(*) > 0 THEN TRUE ELSE FALSE END
+                FROM block b
+                WHERE b.id = ?
+                AND (b.deleted_on IS NULL OR b.deleted_on > now())
+            """;
+
+        return jdbcTemplate.queryForObject(sql, Boolean.class, id);
     }
 
     /**

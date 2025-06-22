@@ -27,22 +27,6 @@ public interface BlockService {
     BlockDTO update(BlockDTO blockDTO);
 
     /**
-     * Partially updates a block.
-     *
-     * @param blockDTO the entity to update partially.
-     * @return the persisted entity.
-     */
-    Optional<BlockDTO> partialUpdate(BlockDTO blockDTO);
-
-    /**
-     * Get all the blocks.
-     *
-     * @param pageable the pagination information.
-     * @return the list of entities.
-     */
-    Page<BlockDTO> findAll(Pageable pageable);
-
-    /**
      * Get the "id" block.
      *
      * @param id the id of the entity.
@@ -58,11 +42,4 @@ public interface BlockService {
      * @return the list of entities.
      */
     Page<BlockDTO> findAllByProjectId(Long projectId, Pageable pageable);
-
-    /**
-     * Delete the "id" block.
-     *
-     * @param id the id of the entity.
-     */
-    void delete(Long id);
 }

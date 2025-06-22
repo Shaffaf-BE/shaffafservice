@@ -1,4 +1,4 @@
-package com.shaffaf.shaffafservice.repository.JdbcTemplate;
+package com.shaffaf.shaffafservice.repository.jdbctemplate;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;

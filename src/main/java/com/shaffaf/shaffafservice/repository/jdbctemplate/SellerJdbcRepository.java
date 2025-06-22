@@ -1,7 +1,7 @@
-package com.shaffaf.shaffafservice.repository.JdbcTemplate;
+package com.shaffaf.shaffafservice.repository.jdbctemplate;
 
 import com.shaffaf.shaffafservice.domain.Seller;
-import com.shaffaf.shaffafservice.domain.enumeration.Status;
+import com.shaffaf.shaffafservice.repository.jdbctemplate.rowmapper.SellerRowMapper;
 import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -24,7 +24,7 @@ public class SellerJdbcRepository {
             ON s.id = p.seller_id
             WHERE p.id = ?
             AND s.phone_number = ?
-            AND s.deleted_on IS NULL
+            AND (s.deleted_on IS NULL OR s.deleted_on > now())
             AND s.status = 'ACTIVE'
             """;
 
@@ -36,26 +36,10 @@ public class SellerJdbcRepository {
             """
             SELECT s.id, s.first_name, s.last_name, s.email, s.status, s.phone_number FROM seller s
             WHERE s.phone_number = ?
-            AND s.deleted_on IS NULL
+            AND (s.deleted_on IS NULL OR s.deleted_on > now())
             AND s.status = 'ACTIVE'
             """;
 
-        return jdbcTemplate
-            .query(
-                sql,
-                (rs, rowNum) -> {
-                    Seller seller = new Seller();
-                    seller.setId(rs.getLong("id"));
-                    seller.setPhoneNumber(rs.getString("phone_number"));
-                    seller.setFirstName(rs.getString("first_name"));
-                    seller.setLastName(rs.getString("last_name"));
-                    seller.setEmail(rs.getString("email"));
-                    seller.setStatus(Status.valueOf(rs.getString("status")));
-                    return seller;
-                },
-                phoneNumber
-            )
-            .stream()
-            .findFirst();
+        return jdbcTemplate.query(sql, new SellerRowMapper(), phoneNumber).stream().findFirst();
     }
 }

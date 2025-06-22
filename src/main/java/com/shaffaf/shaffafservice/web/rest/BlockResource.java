@@ -1,9 +1,8 @@
 package com.shaffaf.shaffafservice.web.rest;
 
-import com.shaffaf.shaffafservice.repository.BlockRepository;
-import com.shaffaf.shaffafservice.repository.JdbcTemplate.ProjectJdbcRepository;
-import com.shaffaf.shaffafservice.repository.JdbcTemplate.SellerJdbcRepository;
-import com.shaffaf.shaffafservice.repository.JdbcTemplate.UnionMemberJdbcRepository;
+import com.shaffaf.shaffafservice.repository.jdbctemplate.BlockJdbcRepository;
+import com.shaffaf.shaffafservice.repository.jdbctemplate.SellerJdbcRepository;
+import com.shaffaf.shaffafservice.repository.jdbctemplate.UnionMemberJdbcRepository;
 import com.shaffaf.shaffafservice.security.AuthoritiesConstants;
 import com.shaffaf.shaffafservice.security.SecurityUtils;
 import com.shaffaf.shaffafservice.service.BlockService;
@@ -11,7 +10,6 @@ import com.shaffaf.shaffafservice.service.dto.BlockDTO;
 import com.shaffaf.shaffafservice.util.PhoneNumberUtil;
 import com.shaffaf.shaffafservice.web.rest.errors.BadRequestAlertException;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotNull;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
@@ -43,15 +41,12 @@ public class BlockResource {
     private static final Logger LOG = LoggerFactory.getLogger(BlockResource.class);
 
     private static final String ENTITY_NAME = "shaffafserviceBlock";
+    private final BlockJdbcRepository blockJdbcRepository;
 
     @Value("${jhipster.clientApp.name}")
     private String applicationName;
 
     private final BlockService blockService;
-
-    private final BlockRepository blockRepository;
-
-    private final ProjectJdbcRepository projectJdbcRepository;
 
     private final SellerJdbcRepository sellerJdbcRepository;
 
@@ -59,16 +54,14 @@ public class BlockResource {
 
     public BlockResource(
         BlockService blockService,
-        BlockRepository blockRepository,
-        ProjectJdbcRepository projectJdbcRepository,
         SellerJdbcRepository sellerJdbcRepository,
-        UnionMemberJdbcRepository unionMemberJdbcRepository
+        UnionMemberJdbcRepository unionMemberJdbcRepository,
+        BlockJdbcRepository blockJdbcRepository
     ) {
         this.blockService = blockService;
-        this.blockRepository = blockRepository;
-        this.projectJdbcRepository = projectJdbcRepository;
         this.sellerJdbcRepository = sellerJdbcRepository;
         this.unionMemberJdbcRepository = unionMemberJdbcRepository;
+        this.blockJdbcRepository = blockJdbcRepository;
     }
 
     /**
@@ -158,6 +151,19 @@ public class BlockResource {
      * @throws URISyntaxException if the Location URI syntax is incorrect.
      */
     @PutMapping("/{id}")
+    @PreAuthorize(
+        "hasAnyAuthority(" +
+        "\"" +
+        AuthoritiesConstants.ADMIN +
+        "\", " +
+        "\"" +
+        AuthoritiesConstants.SELLER +
+        "\", " +
+        "\"" +
+        AuthoritiesConstants.UNION_HEAD +
+        "\"" +
+        ")"
+    )
     public ResponseEntity<BlockDTO> updateBlock(
         @PathVariable(value = "id", required = false) final Long id,
         @Valid @RequestBody BlockDTO blockDTO
@@ -170,50 +176,53 @@ public class BlockResource {
             throw new BadRequestAlertException("Invalid ID", ENTITY_NAME, "idinvalid");
         }
 
-        if (!blockRepository.existsById(id)) {
+        if (!blockJdbcRepository.existsById(id)) {
             throw new BadRequestAlertException("Entity not found", ENTITY_NAME, "idnotfound");
+        }
+
+        String currentUserLogin = SecurityUtils.getCurrentUserLogin()
+            .orElseThrow(() ->
+                new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
+                    "Current user not found. Please ensure you are properly authenticated."
+                )
+            );
+
+        String phoneNumber = PhoneNumberUtil.normalize(currentUserLogin);
+
+        if (!PhoneNumberUtil.isValidPakistaniMobile(phoneNumber)) {
+            throw new BadRequestAlertException("Invalid phone number format", ENTITY_NAME, "invalidphonenumber");
+        }
+
+        // Check if the current user is authorized to update a block
+        // Admins can update blocks for any project, no additional checks needed
+        // If the user is a union head, they can update blocks for their own projects
+        if (
+            SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.UNION_HEAD) &&
+            !SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.ADMIN)
+        ) {
+            if (!unionMemberJdbcRepository.isUnionMemberAssociatedWithProject(blockDTO.getProject().getId(), phoneNumber)) {
+                throw new BadRequestAlertException(
+                    "Union heads can only update blocks for their own projects",
+                    ENTITY_NAME,
+                    "unauthorized"
+                );
+            }
+        }
+        // If the Seller is the current user, they can only update blocks for their associate project
+        if (
+            SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.SELLER) &&
+            !SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.ADMIN)
+        ) {
+            if (!sellerJdbcRepository.isSellerAssociatedWithProject(blockDTO.getProject().getId(), phoneNumber)) {
+                throw new BadRequestAlertException("Sellers can only update blocks for their own projects", ENTITY_NAME, "unauthorized");
+            }
         }
 
         blockDTO = blockService.update(blockDTO);
         return ResponseEntity.ok()
             .headers(HeaderUtil.createEntityUpdateAlert(applicationName, true, ENTITY_NAME, blockDTO.getId().toString()))
             .body(blockDTO);
-    }
-
-    /**
-     * {@code PATCH  /blocks/:id} : Partial updates given fields of an existing block, field will ignore if it is null
-     *
-     * @param id the id of the blockDTO to save.
-     * @param blockDTO the blockDTO to update.
-     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body the updated blockDTO,
-     * or with status {@code 400 (Bad Request)} if the blockDTO is not valid,
-     * or with status {@code 404 (Not Found)} if the blockDTO is not found,
-     * or with status {@code 500 (Internal Server Error)} if the blockDTO couldn't be updated.
-     * @throws URISyntaxException if the Location URI syntax is incorrect.
-     */
-    @PatchMapping(value = "/{id}", consumes = { "application/json", "application/merge-patch+json" })
-    public ResponseEntity<BlockDTO> partialUpdateBlock(
-        @PathVariable(value = "id", required = false) final Long id,
-        @NotNull @RequestBody BlockDTO blockDTO
-    ) throws URISyntaxException {
-        LOG.debug("REST request to partial update Block partially : {}, {}", id, blockDTO);
-        if (blockDTO.getId() == null) {
-            throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
-        }
-        if (!Objects.equals(id, blockDTO.getId())) {
-            throw new BadRequestAlertException("Invalid ID", ENTITY_NAME, "idinvalid");
-        }
-
-        if (!blockRepository.existsById(id)) {
-            throw new BadRequestAlertException("Entity not found", ENTITY_NAME, "idnotfound");
-        }
-
-        Optional<BlockDTO> result = blockService.partialUpdate(blockDTO);
-
-        return ResponseUtil.wrapOrNotFound(
-            result,
-            HeaderUtil.createEntityUpdateAlert(applicationName, true, ENTITY_NAME, blockDTO.getId().toString())
-        );
     }
 
     /**
@@ -241,20 +250,5 @@ public class BlockResource {
         LOG.debug("REST request to get Block : {}", id);
         Optional<BlockDTO> blockDTO = blockService.findOne(id);
         return ResponseUtil.wrapOrNotFound(blockDTO);
-    }
-
-    /**
-     * {@code DELETE  /blocks/:id} : delete the "id" block.
-     *
-     * @param id the id of the blockDTO to delete.
-     * @return the {@link ResponseEntity} with status {@code 204 (NO_CONTENT)}.
-     */
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteBlock(@PathVariable("id") Long id) {
-        LOG.debug("REST request to delete Block : {}", id);
-        blockService.delete(id);
-        return ResponseEntity.noContent()
-            .headers(HeaderUtil.createEntityDeletionAlert(applicationName, true, ENTITY_NAME, id.toString()))
-            .build();
     }
 }

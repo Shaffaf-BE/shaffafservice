@@ -1,8 +1,6 @@
 package com.shaffaf.shaffafservice.service.impl;
 
-import com.shaffaf.shaffafservice.domain.Block;
-import com.shaffaf.shaffafservice.repository.BlockRepository;
-import com.shaffaf.shaffafservice.repository.JdbcTemplate.BlockJdbcRepository;
+import com.shaffaf.shaffafservice.repository.jdbctemplate.BlockJdbcRepository;
 import com.shaffaf.shaffafservice.security.SecurityUtils;
 import com.shaffaf.shaffafservice.service.BlockService;
 import com.shaffaf.shaffafservice.service.dto.BlockDTO;
@@ -24,14 +22,11 @@ public class BlockServiceImpl implements BlockService {
 
     private static final Logger LOG = LoggerFactory.getLogger(BlockServiceImpl.class);
 
-    private final BlockRepository blockRepository;
-
     private final BlockJdbcRepository blockJdbcRepository;
 
     private final BlockMapper blockMapper;
 
-    public BlockServiceImpl(BlockRepository blockRepository, BlockMapper blockMapper, BlockJdbcRepository blockJdbcRepository) {
-        this.blockRepository = blockRepository;
+    public BlockServiceImpl(BlockMapper blockMapper, BlockJdbcRepository blockJdbcRepository) {
         this.blockMapper = blockMapper;
         this.blockJdbcRepository = blockJdbcRepository;
     }
@@ -49,33 +44,21 @@ public class BlockServiceImpl implements BlockService {
     }
 
     @Override
+    @Transactional
     public BlockDTO update(BlockDTO blockDTO) {
         LOG.debug("Request to update Block : {}", blockDTO);
-        Block block = blockMapper.toEntity(blockDTO);
-        block = blockRepository.save(block);
-        return blockMapper.toDto(block);
-    }
 
-    @Override
-    public Optional<BlockDTO> partialUpdate(BlockDTO blockDTO) {
-        LOG.debug("Request to partially update Block : {}", blockDTO);
+        String username = SecurityUtils.getCurrentUserLogin().orElseThrow(() -> new IllegalStateException("Current user login not found"));
 
-        return blockRepository
-            .findById(blockDTO.getId())
-            .map(existingBlock -> {
-                blockMapper.partialUpdate(existingBlock, blockDTO);
+        blockJdbcRepository.updateBlock(
+            blockDTO.getId(),
+            blockDTO.getName(),
+            blockDTO.getProject().getId(),
+            username,
+            blockDTO.getDeletedOn()
+        );
 
-                return existingBlock;
-            })
-            .map(blockRepository::save)
-            .map(blockMapper::toDto);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Page<BlockDTO> findAll(Pageable pageable) {
-        LOG.debug("Request to get all Blocks");
-        return blockRepository.findAll(pageable).map(blockMapper::toDto);
+        return blockDTO;
     }
 
     @Override
@@ -89,11 +72,5 @@ public class BlockServiceImpl implements BlockService {
     public Page<BlockDTO> findAllByProjectId(Long projectId, Pageable pageable) {
         LOG.debug("Request to get all Blocks by projectId : {}", projectId);
         return blockJdbcRepository.findAllByProjectId(projectId, pageable).map(blockMapper::toDto);
-    }
-
-    @Override
-    public void delete(Long id) {
-        LOG.debug("Request to delete Block : {}", id);
-        blockRepository.deleteById(id);
     }
 }
