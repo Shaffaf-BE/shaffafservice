@@ -232,11 +232,24 @@ public class BlockResource {
      * @return the {@link ResponseEntity} with status {@code 200 (OK)} and the list of blocks in body.
      */
     @GetMapping("/projects/{projectId}")
-    public ResponseEntity<List<BlockDTO>> getAllBlocks(@PathVariable("projectId") Long projectId, Pageable pageable) {
+    @PreAuthorize(
+        "hasAnyAuthority(" +
+        "\"" +
+        AuthoritiesConstants.ADMIN +
+        "\", " +
+        "\"" +
+        AuthoritiesConstants.SELLER +
+        "\", " +
+        "\"" +
+        AuthoritiesConstants.UNION_HEAD +
+        "\"" +
+        ")"
+    )
+    public ResponseEntity<Page<BlockDTO>> getAllBlocks(@PathVariable("projectId") Long projectId, Pageable pageable) {
         LOG.debug("REST request to get a page of Blocks By ProjectId");
         Page<BlockDTO> page = blockService.findAllByProjectId(projectId, pageable);
         HttpHeaders headers = PaginationUtil.generatePaginationHttpHeaders(ServletUriComponentsBuilder.fromCurrentRequest(), page);
-        return ResponseEntity.ok().headers(headers).body(page.getContent());
+        return ResponseEntity.ok().headers(headers).body(page);
     }
 
     /**
@@ -246,6 +259,19 @@ public class BlockResource {
      * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body the blockDTO, or with status {@code 404 (Not Found)}.
      */
     @GetMapping("/{id}")
+    @PreAuthorize(
+        "hasAnyAuthority(" +
+        "\"" +
+        AuthoritiesConstants.ADMIN +
+        "\", " +
+        "\"" +
+        AuthoritiesConstants.SELLER +
+        "\", " +
+        "\"" +
+        AuthoritiesConstants.UNION_HEAD +
+        "\"" +
+        ")"
+    )
     public ResponseEntity<BlockDTO> getBlock(@PathVariable("id") Long id) {
         LOG.debug("REST request to get Block : {}", id);
         Optional<BlockDTO> blockDTO = blockService.findOne(id);
