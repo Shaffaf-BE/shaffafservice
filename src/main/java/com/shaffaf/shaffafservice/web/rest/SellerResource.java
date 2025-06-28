@@ -3,6 +3,7 @@ package com.shaffaf.shaffafservice.web.rest;
 import com.shaffaf.shaffafservice.repository.SellerRepository;
 import com.shaffaf.shaffafservice.security.AuthoritiesConstants;
 import com.shaffaf.shaffafservice.service.SellerService;
+import com.shaffaf.shaffafservice.service.dto.DashboardDataDTO;
 import com.shaffaf.shaffafservice.service.dto.SellerDTO;
 import com.shaffaf.shaffafservice.util.PhoneNumberUtil;
 import com.shaffaf.shaffafservice.web.rest.errors.BadRequestAlertException;
@@ -10,15 +11,15 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -217,5 +218,101 @@ public class SellerResource {
         return ResponseEntity.ok()
             .headers(HeaderUtil.createEntityUpdateAlert(applicationName, true, ENTITY_NAME, result.getId().toString()))
             .body(result);
+    }
+
+    /**
+     * {@code GET  /sellers/dashboard} : Get dashboard data with aggregated seller statistics and transactions.
+     *
+     * @param pageable the pagination information for transaction details.
+     * @param sortBy the field to sort by.
+     * @param sortDirection the sort direction (asc or desc).
+     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and the dashboard data in body.
+     */
+    @GetMapping("/sellers/dashboard")
+    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.USER + "\")")
+    public ResponseEntity<DashboardDataDTO> getDashboardData(
+        @org.springdoc.core.annotations.ParameterObject Pageable pageable,
+        @RequestParam(value = "sortBy", defaultValue = "id") String sortBy,
+        @RequestParam(value = "sortDirection", defaultValue = "desc") String sortDirection
+    ) {
+        LOG.debug("REST request to get dashboard data");
+
+        DashboardDataDTO dashboardData = sellerService.getDashboardData(pageable, sortBy, sortDirection);
+
+        return ResponseEntity.ok()
+            .headers(
+                PaginationUtil.generatePaginationHttpHeaders(
+                    ServletUriComponentsBuilder.fromCurrentRequest(),
+                    new PageImpl<>(dashboardData.getTransactionDetails(), pageable, dashboardData.getTransactionDetails().size())
+                )
+            )
+            .body(dashboardData);
+    }
+
+    /**
+     * GET /sellers/debug-transaction-data : Debug transaction data mapping.
+     *
+     * @return the ResponseEntity with status 200 (OK) and debug data
+     */
+    @GetMapping("/debug-transaction-data")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Map<String, Object>> getDebugTransactionData() {
+        LOG.debug("REST request to get debug transaction data");
+        try {
+            // Test the simple query first
+            List<Object[]> simpleData = sellerRepository.getSimpleTransactionDetails();
+            Long activeCount = sellerRepository.countActiveSellers();
+            Long projectCount = sellerRepository.countActiveProjects();
+
+            Map<String, Object> debugInfo = new HashMap<>();
+            debugInfo.put("activeSellerCount", activeCount);
+            debugInfo.put("activeProjectCount", projectCount);
+            debugInfo.put("simpleDataCount", simpleData.size());
+            if (projectCount > 0) {
+                List<Object[]> sampleProjects = sellerRepository.getSampleProjectData();
+                debugInfo.put("sampleProjectCount", sampleProjects.size());
+
+                if (!sampleProjects.isEmpty()) {
+                    Object[] firstProject = sampleProjects.get(0);
+                    debugInfo.put("firstProjectData", Arrays.toString(firstProject));
+                }
+
+                // Test the actual project transactions query
+                try {
+                    Page<Object[]> actualProjectPage = sellerRepository.getActualProjectTransactions(
+                        "amount",
+                        "DESC",
+                        org.springframework.data.domain.PageRequest.of(0, 3)
+                    );
+                    debugInfo.put("actualProjectTransactionsCount", actualProjectPage.getContent().size());
+
+                    if (!actualProjectPage.isEmpty()) {
+                        Object[] firstTransaction = actualProjectPage.getContent().get(0);
+                        debugInfo.put("firstActualTransaction", Arrays.toString(firstTransaction));
+                    }
+                } catch (Exception e) {
+                    debugInfo.put("actualProjectTransactionsError", e.getMessage());
+                }
+            }
+
+            if (!simpleData.isEmpty()) {
+                Object[] firstRow = simpleData.get(0);
+                debugInfo.put("firstRowLength", firstRow.length);
+                debugInfo.put("firstRowData", Arrays.toString(firstRow));
+
+                List<String> fieldTypes = new ArrayList<>();
+                for (Object field : firstRow) {
+                    fieldTypes.add(field != null ? field.getClass().getSimpleName() : "null");
+                }
+                debugInfo.put("fieldTypes", fieldTypes);
+            }
+
+            return ResponseEntity.ok(debugInfo);
+        } catch (Exception e) {
+            LOG.error("Error getting debug transaction data: {}", e.getMessage(), e);
+            Map<String, Object> errorInfo = new HashMap<>();
+            errorInfo.put("error", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorInfo);
+        }
     }
 }

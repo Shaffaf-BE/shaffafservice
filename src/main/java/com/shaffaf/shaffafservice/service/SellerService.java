@@ -1,5 +1,6 @@
 package com.shaffaf.shaffafservice.service;
 
+import com.shaffaf.shaffafservice.service.dto.DashboardDataDTO;
 import com.shaffaf.shaffafservice.service.dto.SellerDTO;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -50,10 +51,20 @@ public interface SellerService {
     SellerDTO saveWithNativeQuery(SellerDTO sellerDTO);
 
     /**
+     * Get dashboard data with financial aggregations and transaction details.
+     *
+     * @param pageable the pagination information for transaction details
+     * @param sortBy the field to sort by (sellerName, amount, transactionDate)
+     * @param sortDirection the sort direction (ASC or DESC)
+     * @return the dashboard data with aggregated information
+     */
+    DashboardDataDTO getDashboardData(Pageable pageable, String sortBy, String sortDirection);
+
+    /**
      * Update a seller using native SQL query.
      *
      * @param sellerDTO the entity to update
-     * @return the updated entity
+     * @return the persisted entity
      */
     SellerDTO updateWithNativeQuery(SellerDTO sellerDTO);
 }
