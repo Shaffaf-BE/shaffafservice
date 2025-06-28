@@ -1,7 +1,6 @@
 package com.shaffaf.shaffafservice.web.rest;
 
 import com.shaffaf.shaffafservice.domain.Seller;
-import com.shaffaf.shaffafservice.repository.ProjectRepository;
 import com.shaffaf.shaffafservice.repository.SellerRepository;
 import com.shaffaf.shaffafservice.security.AuthoritiesConstants;
 import com.shaffaf.shaffafservice.security.SecurityUtils;
@@ -9,20 +8,16 @@ import com.shaffaf.shaffafservice.service.ProjectService;
 import com.shaffaf.shaffafservice.service.dto.ProjectDTO;
 import com.shaffaf.shaffafservice.service.dto.SellerDTO;
 import com.shaffaf.shaffafservice.util.PhoneNumberUtil;
-import com.shaffaf.shaffafservice.web.rest.errors.BadRequestAlertException;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -32,7 +27,6 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import tech.jhipster.web.util.HeaderUtil;
 import tech.jhipster.web.util.PaginationUtil;
-import tech.jhipster.web.util.ResponseUtil;
 
 /**
  * REST controller for managing {@link com.shaffaf.shaffafservice.domain.Project}.
@@ -50,145 +44,14 @@ public class ProjectResource {
 
     private final ProjectService projectService;
 
-    private final ProjectRepository projectRepository;
-
     private final SellerRepository sellerRepository;
 
-    public ProjectResource(ProjectService projectService, ProjectRepository projectRepository, SellerRepository sellerRepository) {
+    public ProjectResource(ProjectService projectService, SellerRepository sellerRepository) {
         this.projectService = projectService;
-        this.projectRepository = projectRepository;
         this.sellerRepository = sellerRepository;
     }
 
     /**
-     * {@code POST  /projects} : Create a new project.
-     *
-     * @param projectDTO the projectDTO to create.
-     * @return the {@link ResponseEntity} with status {@code 201 (Created)} and with body the new projectDTO, or with status {@code 400 (Bad Request)} if the project has already an ID.
-     * @throws URISyntaxException if the Location URI syntax is incorrect.
-     */
-    @PostMapping("")
-    public ResponseEntity<ProjectDTO> createProject(@Valid @RequestBody ProjectDTO projectDTO) throws URISyntaxException {
-        LOG.debug("REST request to save Project : {}", projectDTO);
-        if (projectDTO.getId() != null) {
-            throw new BadRequestAlertException("A new project cannot already have an ID", ENTITY_NAME, "idexists");
-        }
-        projectDTO = projectService.save(projectDTO);
-        return ResponseEntity.created(new URI("/api/projects/" + projectDTO.getId()))
-            .headers(HeaderUtil.createEntityCreationAlert(applicationName, true, ENTITY_NAME, projectDTO.getId().toString()))
-            .body(projectDTO);
-    }
-
-    /**
-     * {@code PUT  /projects/:id} : Updates an existing project.
-     *
-     * @param id the id of the projectDTO to save.
-     * @param projectDTO the projectDTO to update.
-     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body the updated projectDTO,
-     * or with status {@code 400 (Bad Request)} if the projectDTO is not valid,
-     * or with status {@code 500 (Internal Server Error)} if the projectDTO couldn't be updated.
-     * @throws URISyntaxException if the Location URI syntax is incorrect.
-     */
-    @PutMapping("/{id}")
-    public ResponseEntity<ProjectDTO> updateProject(
-        @PathVariable(value = "id", required = false) final Long id,
-        @Valid @RequestBody ProjectDTO projectDTO
-    ) throws URISyntaxException {
-        LOG.debug("REST request to update Project : {}, {}", id, projectDTO);
-        if (projectDTO.getId() == null) {
-            throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
-        }
-        if (!Objects.equals(id, projectDTO.getId())) {
-            throw new BadRequestAlertException("Invalid ID", ENTITY_NAME, "idinvalid");
-        }
-
-        if (!projectRepository.existsById(id)) {
-            throw new BadRequestAlertException("Entity not found", ENTITY_NAME, "idnotfound");
-        }
-
-        projectDTO = projectService.update(projectDTO);
-        return ResponseEntity.ok()
-            .headers(HeaderUtil.createEntityUpdateAlert(applicationName, true, ENTITY_NAME, projectDTO.getId().toString()))
-            .body(projectDTO);
-    }
-
-    /**
-     * {@code PATCH  /projects/:id} : Partial updates given fields of an existing project, field will ignore if it is null
-     *
-     * @param id the id of the projectDTO to save.
-     * @param projectDTO the projectDTO to update.
-     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body the updated projectDTO,
-     * or with status {@code 400 (Bad Request)} if the projectDTO is not valid,
-     * or with status {@code 404 (Not Found)} if the projectDTO is not found,
-     * or with status {@code 500 (Internal Server Error)} if the projectDTO couldn't be updated.
-     * @throws URISyntaxException if the Location URI syntax is incorrect.
-     */
-    @PatchMapping(value = "/{id}", consumes = { "application/json", "application/merge-patch+json" })
-    public ResponseEntity<ProjectDTO> partialUpdateProject(
-        @PathVariable(value = "id", required = false) final Long id,
-        @NotNull @RequestBody ProjectDTO projectDTO
-    ) throws URISyntaxException {
-        LOG.debug("REST request to partial update Project partially : {}, {}", id, projectDTO);
-        if (projectDTO.getId() == null) {
-            throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
-        }
-        if (!Objects.equals(id, projectDTO.getId())) {
-            throw new BadRequestAlertException("Invalid ID", ENTITY_NAME, "idinvalid");
-        }
-
-        if (!projectRepository.existsById(id)) {
-            throw new BadRequestAlertException("Entity not found", ENTITY_NAME, "idnotfound");
-        }
-
-        Optional<ProjectDTO> result = projectService.partialUpdate(projectDTO);
-
-        return ResponseUtil.wrapOrNotFound(
-            result,
-            HeaderUtil.createEntityUpdateAlert(applicationName, true, ENTITY_NAME, projectDTO.getId().toString())
-        );
-    }
-
-    /**
-     * {@code GET  /projects} : get all the projects.
-     *
-     * @param pageable the pagination information.
-     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and the list of projects in body.
-     */
-    @GetMapping("")
-    public ResponseEntity<List<ProjectDTO>> getAllProjects(@org.springdoc.core.annotations.ParameterObject Pageable pageable) {
-        LOG.debug("REST request to get a page of Projects");
-        Page<ProjectDTO> page = projectService.findAll(pageable);
-        HttpHeaders headers = PaginationUtil.generatePaginationHttpHeaders(ServletUriComponentsBuilder.fromCurrentRequest(), page);
-        return ResponseEntity.ok().headers(headers).body(page.getContent());
-    }
-
-    /**
-     * {@code GET  /projects/:id} : get the "id" project.
-     *
-     * @param id the id of the projectDTO to retrieve.
-     * @return the {@link ResponseEntity} with status {@code 200 (OK)} and with body the projectDTO, or with status {@code 404 (Not Found)}.
-     */
-    @GetMapping("/{id}")
-    public ResponseEntity<ProjectDTO> getProject(@PathVariable("id") Long id) {
-        LOG.debug("REST request to get Project : {}", id);
-        Optional<ProjectDTO> projectDTO = projectService.findOne(id);
-        return ResponseUtil.wrapOrNotFound(projectDTO);
-    }
-
-    /**
-     * {@code DELETE  /projects/:id} : delete the "id" project.
-     *
-     * @param id the id of the projectDTO to delete.
-     * @return the {@link ResponseEntity} with status {@code 204 (NO_CONTENT)}.
-     */
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteProject(@PathVariable("id") Long id) {
-        LOG.debug("REST request to delete Project : {}", id);
-        projectService.delete(id);
-        return ResponseEntity.noContent()
-            .headers(HeaderUtil.createEntityDeletionAlert(applicationName, true, ENTITY_NAME, id.toString()))
-            .build();
-    }/**
      * {@code POST  /projects/secure/create-by-seller} : Create a new project using native queries for better performance.
      * This endpoint is specifically designed for sellers to create projects.
      * Uses enhanced security, input validation and rate limiting.
@@ -446,9 +309,7 @@ public class ProjectResource {
             );
             LOG.warn("Phone validation failed for user: '{}' (normalized: '{}')", currentUsername, normalizedPhone);
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, errorMessage);
-        }
-
-        // Find seller by mobile number (using normalized phone number)
+        } // Find seller by mobile number (using normalized phone number)
         Optional<Seller> sellerOptional = sellerRepository.findByPhoneNumber(normalizedPhone);
         if (sellerOptional.isEmpty()) {
             String errorMessage = String.format(
@@ -461,13 +322,13 @@ public class ProjectResource {
             LOG.warn("Seller not found for mobile number: {} (normalized from: {})", normalizedPhone, currentUsername);
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, errorMessage);
         }
+        Seller authenticatedSeller = sellerOptional.get();
 
-        Seller authenticatedSeller = sellerOptional.orElseThrow(() ->
-            new ResponseStatusException(HttpStatus.BAD_REQUEST, String.format("Seller not found for mobile number: %s", normalizedPhone))
-        );
+        // Check if user is admin (needed for findByIdSecure call)
+        boolean isAdmin = SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.ADMIN);
 
         // Check if the project exists and get its current details
-        Optional<ProjectDTO> existingProjectOptional = projectService.findOne(projectId);
+        Optional<ProjectDTO> existingProjectOptional = projectService.findByIdSecure(projectId, currentUsername, isAdmin);
         if (existingProjectOptional.isEmpty()) {
             LOG.warn("Project not found with ID: {}", projectId);
             throw new ResponseStatusException(
@@ -476,15 +337,9 @@ public class ProjectResource {
             );
         }
 
-        ProjectDTO existingProject = existingProjectOptional.orElseThrow(() ->
-            new ResponseStatusException(
-                HttpStatus.NOT_FOUND,
-                "Project not found with ID: " + projectId + ". Please verify the project ID and try again."
-            )
-        );
+        ProjectDTO existingProject = existingProjectOptional.get();
 
         // Check if the authenticated seller is the owner of the project or if user is admin
-        boolean isAdmin = SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.ADMIN);
         boolean isProjectOwner =
             existingProject.getSeller() != null && Objects.equals(existingProject.getSeller().getId(), authenticatedSeller.getId());
 
@@ -555,13 +410,9 @@ public class ProjectResource {
 
         try {
             Optional<ProjectDTO> projectDTO = projectService.findByIdSecure(id, currentUsername, isAdmin);
-
             if (projectDTO.isPresent()) {
                 LOG.info("Project {} retrieved successfully by user '{}' (Admin: {})", id, currentUsername, isAdmin);
-                return ResponseEntity.ok()
-                    .body(
-                        projectDTO.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Project not found with ID: " + id))
-                    );
+                return ResponseEntity.ok().body(projectDTO.get());
             } else {
                 LOG.warn("Project {} not found or not accessible for user '{}' (Admin: {})", id, currentUsername, isAdmin);
                 return ResponseEntity.notFound().build();
