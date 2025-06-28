@@ -380,4 +380,182 @@ public interface SellerRepository extends JpaRepository<Seller, Long> {
         nativeQuery = true
     )
     List<Object[]> getSampleProjectData();
+
+    /**
+     * Get aggregated sales data for each unique seller.
+     * Returns comprehensive sales statistics for each seller based on their projects.
+     *
+     * @param sortBy the field to sort by
+     * @param sortDirection the sort direction (ASC or DESC)
+     * @param pageable pagination information
+     * @return Page of aggregated seller sales data
+     */
+    @Query(
+        value = "SELECT " +
+        "s.id as seller_id, " +
+        "TRIM(CONCAT(COALESCE(s.first_name, ''), ' ', COALESCE(s.last_name, ''))) as seller_name, " +
+        "COALESCE(s.phone_number, '') as seller_phone_number, " +
+        "COALESCE(s.email, '') as seller_email, " +
+        "COALESCE(COUNT(p.id), 0) as total_projects, " +
+        "COALESCE(SUM(p.number_of_units), 0) as total_units, " +
+        "COALESCE(SUM(p.fees_per_unit_per_month * p.number_of_units), 0) as total_sales_amount, " +
+        "COALESCE(AVG(p.fees_per_unit_per_month), 0) as average_fees_per_unit, " +
+        "COALESCE(MAX(p.fees_per_unit_per_month * p.number_of_units), 0) as highest_project_amount, " +
+        "COALESCE(MIN(p.fees_per_unit_per_month * p.number_of_units), 0) as lowest_project_amount, " +
+        "COALESCE(p_recent.name, 'No Projects') as most_recent_project_name, " +
+        "COALESCE(p_recent.created_date, s.created_date) as last_project_date, " +
+        "s.status as seller_status " +
+        "FROM seller s " +
+        "LEFT JOIN project p ON s.id = p.seller_id AND p.deleted_date IS NULL " +
+        "LEFT JOIN LATERAL (" +
+        "   SELECT p2.name, p2.created_date " +
+        "   FROM project p2 " +
+        "   WHERE p2.seller_id = s.id AND p2.deleted_date IS NULL " +
+        "   ORDER BY p2.created_date DESC " +
+        "   LIMIT 1" +
+        ") p_recent ON true " +
+        "WHERE s.deleted_on IS NULL AND s.status = 'ACTIVE' " +
+        "GROUP BY s.id, s.first_name, s.last_name, s.phone_number, s.email, s.status, s.created_date, p_recent.name, p_recent.created_date " +
+        "ORDER BY " +
+        "CASE WHEN :sortBy = 'sellerName' AND :sortDirection = 'ASC' THEN TRIM(CONCAT(COALESCE(s.first_name, ''), ' ', COALESCE(s.last_name, ''))) END ASC, " +
+        "CASE WHEN :sortBy = 'sellerName' AND :sortDirection = 'DESC' THEN TRIM(CONCAT(COALESCE(s.first_name, ''), ' ', COALESCE(s.last_name, ''))) END DESC, " +
+        "CASE WHEN :sortBy = 'totalSalesAmount' AND :sortDirection = 'ASC' THEN COALESCE(SUM(p.fees_per_unit_per_month * p.number_of_units), 0) END ASC, " +
+        "CASE WHEN :sortBy = 'totalSalesAmount' AND :sortDirection = 'DESC' THEN COALESCE(SUM(p.fees_per_unit_per_month * p.number_of_units), 0) END DESC, " +
+        "CASE WHEN :sortBy = 'totalProjects' AND :sortDirection = 'ASC' THEN COALESCE(COUNT(p.id), 0) END ASC, " +
+        "CASE WHEN :sortBy = 'totalProjects' AND :sortDirection = 'DESC' THEN COALESCE(COUNT(p.id), 0) END DESC, " +
+        "CASE WHEN :sortBy = 'totalUnits' AND :sortDirection = 'ASC' THEN COALESCE(SUM(p.number_of_units), 0) END ASC, " +
+        "CASE WHEN :sortBy = 'totalUnits' AND :sortDirection = 'DESC' THEN COALESCE(SUM(p.number_of_units), 0) END DESC, " +
+        "COALESCE(SUM(p.fees_per_unit_per_month * p.number_of_units), 0) DESC, s.id DESC",
+        countQuery = "SELECT COUNT(DISTINCT s.id) FROM seller s " +
+        "LEFT JOIN project p ON s.id = p.seller_id AND p.deleted_date IS NULL " +
+        "WHERE s.deleted_on IS NULL AND s.status = 'ACTIVE'",
+        nativeQuery = true
+    )
+    Page<Object[]> getSellerSalesAggregates(
+        @Param("sortBy") String sortBy,
+        @Param("sortDirection") String sortDirection,
+        Pageable pageable
+    );
+
+    /**
+     * Simple test of seller sales aggregation for debugging.
+     */
+    @Query(
+        value = "SELECT " +
+        "s.id, " +
+        "CONCAT(s.first_name, ' ', s.last_name) as seller_name, " +
+        "COUNT(p.id) as project_count, " +
+        "COALESCE(SUM(p.number_of_units), 0) as total_units, " +
+        "COALESCE(SUM(p.fees_per_unit_per_month * p.number_of_units), 0) as total_amount " +
+        "FROM seller s " +
+        "LEFT JOIN project p ON s.id = p.seller_id AND p.deleted_date IS NULL " +
+        "WHERE s.deleted_on IS NULL AND s.status = 'ACTIVE' " +
+        "GROUP BY s.id, s.first_name, s.last_name " +
+        "ORDER BY total_amount DESC " +
+        "LIMIT 5",
+        nativeQuery = true
+    )
+    List<Object[]> getSimpleSellerSalesAggregates();
+
+    /**
+     * Get seller's personal aggregated statistics using native SQL.
+     *
+     * @param sellerId the ID of the seller
+     * @return Object array with seller statistics
+     */
+    @Query(
+        value = "SELECT " +
+        "s.id as seller_id, " +
+        "TRIM(CONCAT(COALESCE(s.first_name, ''), ' ', COALESCE(s.last_name, ''))) as seller_name, " +
+        "COALESCE(s.phone_number, '') as phone_number, " +
+        "COALESCE(s.email, '') as email, " +
+        "COALESCE(COUNT(p.id), 0) as total_projects, " +
+        "COALESCE(SUM(p.fees_per_unit_per_month * p.number_of_units), 0) as total_payment, " +
+        "COALESCE(SUM(CASE WHEN p.status = 'PENDING' THEN p.fees_per_unit_per_month * p.number_of_units ELSE 0 END), 0) as total_dues, " +
+        "COALESCE(COUNT(CASE WHEN p.created_date >= CURRENT_DATE - INTERVAL '30 days' THEN p.id END), 0) as new_projects " +
+        "FROM seller s " +
+        "LEFT JOIN project p ON s.id = p.seller_id AND p.deleted_date IS NULL " +
+        "WHERE s.id = :sellerId AND s.deleted_on IS NULL AND s.status = 'ACTIVE' " +
+        "GROUP BY s.id, s.first_name, s.last_name, s.phone_number, s.email",
+        nativeQuery = true
+    )
+    Optional<Object[]> getSellerPersonalStatistics(@Param("sellerId") Long sellerId);
+
+    /**
+     * Get seller's projects with pagination and sorting using native SQL.
+     *
+     * @param sellerId the ID of the seller
+     * @param sortBy the field to sort by
+     * @param sortDirection the sort direction (ASC or DESC)
+     * @param pageable pagination information
+     * @return Page of seller's projects
+     */
+    @Query(
+        value = "SELECT " +
+        "p.id as project_id, " +
+        "p.name as project_name, " +
+        "(p.fees_per_unit_per_month * p.number_of_units) as amount, " +
+        "p.number_of_units as number_of_units, " +
+        "p.fees_per_unit_per_month as fees_per_unit, " +
+        "p.created_date as created_date, " +
+        "p.status as status, " +
+        "COALESCE(p.description, 'Project for seller') as description, " +
+        "(p.fees_per_unit_per_month * p.number_of_units) as total_revenue, " +
+        "CASE " +
+        "   WHEN p.created_date IS NOT NULL THEN " +
+        "       EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - p.created_date))::INTEGER / 86400 " +
+        "   ELSE 0 " +
+        "END as days_active " +
+        "FROM project p " +
+        "INNER JOIN seller s ON p.seller_id = s.id " +
+        "WHERE s.id = :sellerId AND s.deleted_on IS NULL AND s.status = 'ACTIVE' AND p.deleted_date IS NULL " +
+        "ORDER BY " +
+        "CASE WHEN :sortBy = 'projectName' AND :sortDirection = 'ASC' THEN p.name END ASC, " +
+        "CASE WHEN :sortBy = 'projectName' AND :sortDirection = 'DESC' THEN p.name END DESC, " +
+        "CASE WHEN :sortBy = 'amount' AND :sortDirection = 'ASC' THEN (p.fees_per_unit_per_month * p.number_of_units) END ASC, " +
+        "CASE WHEN :sortBy = 'amount' AND :sortDirection = 'DESC' THEN (p.fees_per_unit_per_month * p.number_of_units) END DESC, " +
+        "CASE WHEN :sortBy = 'createdDate' AND :sortDirection = 'ASC' THEN p.created_date END ASC, " +
+        "CASE WHEN :sortBy = 'createdDate' AND :sortDirection = 'DESC' THEN p.created_date END DESC, " +
+        "CASE WHEN :sortBy = 'status' AND :sortDirection = 'ASC' THEN p.status END ASC, " +
+        "CASE WHEN :sortBy = 'status' AND :sortDirection = 'DESC' THEN p.status END DESC, " +
+        "p.created_date DESC, p.id DESC",
+        countQuery = "SELECT COUNT(*) FROM project p " +
+        "INNER JOIN seller s ON p.seller_id = s.id " +
+        "WHERE s.id = :sellerId AND s.deleted_on IS NULL AND s.status = 'ACTIVE' AND p.deleted_date IS NULL",
+        nativeQuery = true
+    )
+    Page<Object[]> getSellerProjects(
+        @Param("sellerId") Long sellerId,
+        @Param("sortBy") String sortBy,
+        @Param("sortDirection") String sortDirection,
+        Pageable pageable
+    );/**
+     * Get count of sellers referred by a specific seller (for new sellers metric).
+     * Falls back to 0 if referred_by column doesn't exist.
+     *
+     * @param sellerId the ID of the referring seller
+     * @return count of referred sellers
+     */
+
+    @Query(
+        value = "SELECT COALESCE(COUNT(*), 0) FROM seller s " +
+        "WHERE s.deleted_on IS NULL AND s.status = 'ACTIVE' " +
+        "AND s.created_date >= CURRENT_DATE - INTERVAL '30 days' " +
+        "AND s.created_by = CAST(:sellerId AS VARCHAR)",
+        nativeQuery = true
+    )
+    Long getNewSellersReferredBy(@Param("sellerId") Long sellerId);
+
+    /**
+     * Verify seller exists and is active.
+     *
+     * @param sellerId the ID of the seller to check
+     * @return true if seller exists and is active, false otherwise
+     */
+    @Query(
+        value = "SELECT CASE WHEN COUNT(*) > 0 THEN true ELSE false END " +
+        "FROM seller s WHERE s.id = :sellerId AND s.deleted_on IS NULL AND s.status = 'ACTIVE'",
+        nativeQuery = true
+    )
+    Boolean isSellerActiveById(@Param("sellerId") Long sellerId);
 }

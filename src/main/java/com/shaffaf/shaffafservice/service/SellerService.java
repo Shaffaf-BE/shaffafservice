@@ -2,6 +2,7 @@ package com.shaffaf.shaffafservice.service;
 
 import com.shaffaf.shaffafservice.service.dto.DashboardDataDTO;
 import com.shaffaf.shaffafservice.service.dto.SellerDTO;
+import com.shaffaf.shaffafservice.service.dto.SellerPersonalDashboardDTO;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -67,4 +68,29 @@ public interface SellerService {
      * @return the persisted entity
      */
     SellerDTO updateWithNativeQuery(SellerDTO sellerDTO);
+
+    /**
+     * Get seller sales dashboard with aggregated sales data for each unique seller.
+     *
+     * @param pageable the pagination information for seller sales data
+     * @param sortBy the field to sort by (sellerName, totalSalesAmount, totalProjects, totalUnits)
+     * @param sortDirection the sort direction (ASC or DESC)
+     * @return the seller sales dashboard with aggregated information
+     */
+    com.shaffaf.shaffafservice.service.dto.SellerSalesDashboardDTO getSellerSalesDashboard(
+        Pageable pageable,
+        String sortBy,
+        String sortDirection
+    );
+
+    /**
+     * Get seller's personal dashboard with aggregated data and their projects.
+     *
+     * @param sellerId the ID of the seller
+     * @param pageable the pagination information for projects
+     * @param sortBy the field to sort projects by
+     * @param sortDirection the sort direction (ASC or DESC)
+     * @return the seller's personal dashboard data
+     */
+    SellerPersonalDashboardDTO getSellerPersonalDashboard(Long sellerId, Pageable pageable, String sortBy, String sortDirection);
 }

@@ -2,9 +2,14 @@ package com.shaffaf.shaffafservice.service.impl;
 
 import com.shaffaf.shaffafservice.domain.enumeration.Status;
 import com.shaffaf.shaffafservice.repository.SellerRepository;
+import com.shaffaf.shaffafservice.security.SqlSecurityUtil;
 import com.shaffaf.shaffafservice.service.SellerService;
 import com.shaffaf.shaffafservice.service.dto.DashboardDataDTO;
 import com.shaffaf.shaffafservice.service.dto.SellerDTO;
+import com.shaffaf.shaffafservice.service.dto.SellerPersonalDashboardDTO;
+import com.shaffaf.shaffafservice.service.dto.SellerProjectDTO;
+import com.shaffaf.shaffafservice.service.dto.SellerSalesAggregateDTO;
+import com.shaffaf.shaffafservice.service.dto.SellerSalesDashboardDTO;
 import com.shaffaf.shaffafservice.service.dto.TransactionDetailDTO;
 import com.shaffaf.shaffafservice.service.mapper.SellerMapper;
 import com.shaffaf.shaffafservice.util.PhoneNumberUtil;
@@ -130,8 +135,13 @@ public class SellerServiceImpl implements SellerService {
     public DashboardDataDTO getDashboardData(Pageable pageable, String sortBy, String sortDirection) {
         LOG.debug("Request to get dashboard data with pagination and sorting");
 
-        // Validate and sanitize sort parameters
-        String validatedSortBy = validateSortBy(sortBy);
+        // Validate pagination parameters to prevent abuse
+        if (!SqlSecurityUtil.isValidPagination(pageable.getPageNumber(), pageable.getPageSize(), 1000)) {
+            throw new IllegalArgumentException("Invalid pagination parameters");
+        }
+
+        // Validate and sanitize sort parameters with enhanced security
+        String validatedSortBy = validateSortBySecure(sortBy);
         String validatedSortDirection = validateSortDirection(sortDirection);
         try {
             // Get aggregated statistics using individual queries to avoid array parsing issues
@@ -287,6 +297,192 @@ public class SellerServiceImpl implements SellerService {
             .orElseThrow(() -> new IllegalArgumentException("Updated seller not found"));
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public SellerSalesDashboardDTO getSellerSalesDashboard(Pageable pageable, String sortBy, String sortDirection) {
+        LOG.debug("Request to get seller sales dashboard with pagination and sorting");
+
+        // Validate pagination parameters to prevent abuse (stricter for admin endpoints)
+        if (!SqlSecurityUtil.isValidPagination(pageable.getPageNumber(), pageable.getPageSize(), 500)) {
+            throw new IllegalArgumentException("Invalid pagination parameters for sales dashboard");
+        }
+
+        // Validate and sanitize sort parameters
+        String validatedSortBy = validateSellerSalesSortBy(sortBy);
+        String validatedSortDirection = validateSortDirection(sortDirection);
+
+        try {
+            // Get aggregated statistics using individual queries (reuse existing dashboard queries)
+            BigDecimal totalPayment = sellerRepository.getTotalPayment();
+            Long totalSellers = sellerRepository.getTotalSellers();
+            BigDecimal totalSales = totalPayment; // Total sales is same as total payment in this context
+            Long newSellers = sellerRepository.getNewSellers();
+            BigDecimal totalDues = sellerRepository.getTotalDues();
+
+            // Debug logging
+            LOG.debug(
+                "Dashboard statistics - Payment: {}, Sellers: {}, Sales: {}, New: {}, Dues: {}",
+                totalPayment,
+                totalSellers,
+                totalSales,
+                newSellers,
+                totalDues
+            );
+
+            // Get seller sales aggregates with pagination and sorting
+            Page<Object[]> sellerSalesPage = sellerRepository.getSellerSalesAggregates(validatedSortBy, validatedSortDirection, pageable);
+
+            List<SellerSalesAggregateDTO> sellerSalesData = sellerSalesPage
+                .getContent()
+                .stream()
+                .map(this::mapToSellerSalesAggregateDTO)
+                .collect(Collectors.toList());
+
+            LOG.debug("Seller sales data count: {}", sellerSalesData.size());
+
+            // Log the first few seller sales for debugging
+            sellerSalesData.stream().limit(3).forEach(dto -> LOG.debug("Seller Sales DTO: {}", dto));
+
+            return new SellerSalesDashboardDTO(
+                totalPayment,
+                totalSellers,
+                totalSales,
+                newSellers,
+                totalDues,
+                sellerSalesData,
+                sellerSalesPage.getTotalElements(),
+                pageable.getPageNumber(),
+                sellerSalesPage.getTotalPages()
+            );
+        } catch (Exception e) {
+            LOG.error("Error retrieving seller sales dashboard: {}", e.getMessage(), e);
+            // Return empty dashboard in case of error
+            return createEmptySellerSalesDashboard(pageable);
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SellerPersonalDashboardDTO getSellerPersonalDashboard(Long sellerId, Pageable pageable, String sortBy, String sortDirection) {
+        LOG.debug("Request to get personal dashboard for seller ID: {}", sellerId);
+
+        // Validate seller ID
+        if (sellerId == null || sellerId <= 0) {
+            throw new IllegalArgumentException("Valid seller ID is required");
+        }
+
+        // Validate pagination parameters
+        if (!SqlSecurityUtil.isValidPagination(pageable.getPageNumber(), pageable.getPageSize(), 100)) {
+            throw new IllegalArgumentException("Invalid pagination parameters for personal dashboard");
+        }
+
+        // Validate and sanitize sort parameters
+        String validatedSortBy = validateProjectSortBy(sortBy);
+        String validatedSortDirection = validateSortDirection(sortDirection);
+
+        try {
+            // First verify seller exists and is active
+            Boolean isSellerActive = sellerRepository.isSellerActiveById(sellerId);
+            if (isSellerActive == null || !isSellerActive) {
+                throw new IllegalArgumentException("Seller not found or inactive");
+            } // Get seller's personal statistics
+            Optional<Object[]> sellerStatsOpt = sellerRepository.getSellerPersonalStatistics(sellerId);
+            if (!sellerStatsOpt.isPresent()) {
+                throw new IllegalArgumentException("Unable to retrieve seller statistics");
+            }
+            Object[] sellerStats = sellerStatsOpt.orElseThrow();
+
+            // Check if the result is a nested array structure and extract the actual data
+            if (sellerStats.length == 1 && sellerStats[0] instanceof Object[]) {
+                // Handle nested array structure
+                sellerStats = (Object[]) sellerStats[0];
+                LOG.debug("Extracted nested array structure with {} elements", sellerStats.length);
+            }
+
+            LOG.debug("Seller statistics array length: {}, contents: {}", sellerStats.length, java.util.Arrays.toString(sellerStats));
+
+            // Validate array length
+            if (sellerStats.length < 8) {
+                throw new IllegalArgumentException("Invalid seller statistics format - expected 8 fields, got " + sellerStats.length);
+            }
+
+            // Parse seller statistics with proper error handling
+            String sellerName;
+            String phoneNumber;
+            String email;
+            Long totalProjects;
+            BigDecimal totalPayment;
+            BigDecimal totalDues;
+            Long newProjects;
+
+            try {
+                sellerName = sellerStats[1] != null ? sellerStats[1].toString().trim() : "Unknown Seller";
+                phoneNumber = sellerStats[2] != null ? sellerStats[2].toString().trim() : "";
+                email = sellerStats[3] != null ? sellerStats[3].toString().trim() : "";
+                totalProjects = safeParseLong(sellerStats[4]);
+                totalPayment = safeParseBigDecimal(sellerStats[5]);
+                totalDues = safeParseBigDecimal(sellerStats[6]);
+                newProjects = safeParseLong(sellerStats[7]);
+                LOG.debug(
+                    "Parsed statistics - Name: {}, Projects: {}, Payment: {}, Dues: {}, NewProjects: {}",
+                    sellerName,
+                    totalProjects,
+                    totalPayment,
+                    totalDues,
+                    newProjects
+                );
+            } catch (ArrayIndexOutOfBoundsException e) {
+                LOG.error("Array index error parsing seller statistics: {}", e.getMessage());
+                throw new IllegalArgumentException("Failed to parse seller statistics - array structure mismatch: " + e.getMessage());
+            }
+
+            // Get count of sellers referred by this seller (for new sellers metric)
+            Long newSellers = sellerRepository.getNewSellersReferredBy(sellerId);
+
+            // Total sales is same as total payment in this context
+            BigDecimal totalSales = totalPayment;
+
+            LOG.debug(
+                "Seller {} statistics - Projects: {}, Payment: {}, Sales: {}, New Sellers: {}, Dues: {}",
+                sellerName,
+                totalProjects,
+                totalPayment,
+                totalSales,
+                newSellers,
+                totalDues
+            );
+
+            // Get seller's projects with pagination
+            Page<Object[]> projectsPage = sellerRepository.getSellerProjects(sellerId, validatedSortBy, validatedSortDirection, pageable);
+
+            List<SellerProjectDTO> projects = projectsPage
+                .getContent()
+                .stream()
+                .map(this::mapToSellerProjectDTO)
+                .collect(Collectors.toList());
+
+            LOG.debug("Retrieved {} projects for seller {}", projects.size(), sellerName);
+
+            return new SellerPersonalDashboardDTO(
+                sellerName,
+                phoneNumber,
+                email,
+                totalPayment,
+                totalProjects,
+                totalSales,
+                newSellers != null ? newSellers : 0L,
+                totalDues,
+                projects,
+                projectsPage.getTotalElements(),
+                pageable.getPageNumber(),
+                projectsPage.getTotalPages()
+            );
+        } catch (Exception e) {
+            LOG.error("Error retrieving personal dashboard for seller ID {}: {}", sellerId, e.getMessage(), e);
+            throw new RuntimeException("Failed to retrieve personal dashboard: " + e.getMessage());
+        }
+    }
+
     /**
      * Creates an empty dashboard data object for error cases.
      */
@@ -295,26 +491,43 @@ public class SellerServiceImpl implements SellerService {
     }
 
     /**
-     * Validates and sanitizes the sort field parameter.
+     * Creates an empty seller sales dashboard object for error cases.
      */
-    private String validateSortBy(String sortBy) {
+    private SellerSalesDashboardDTO createEmptySellerSalesDashboard(Pageable pageable) {
+        return new SellerSalesDashboardDTO(
+            BigDecimal.ZERO,
+            0L,
+            BigDecimal.ZERO,
+            0L,
+            BigDecimal.ZERO,
+            List.of(),
+            0L,
+            pageable.getPageNumber(),
+            0
+        );
+    }
+
+    /**
+     * Validates and sanitizes the sort field parameter for seller sales dashboard.
+     */
+    private String validateSellerSalesSortBy(String sortBy) {
         if (sortBy == null || sortBy.trim().isEmpty()) {
-            return "transactionDate"; // default sort
+            return "totalSalesAmount"; // Default sort
         }
 
-        // Allowed sort fields to prevent SQL injection
-        switch (sortBy.toLowerCase().trim()) {
+        String trimmed = sortBy.trim().toLowerCase();
+        switch (trimmed) {
             case "sellername":
-            case "seller_name":
                 return "sellerName";
-            case "amount":
-                return "amount";
-            case "transactiondate":
-            case "transaction_date":
-                return "transactionDate";
+            case "totalsalesamount":
+                return "totalSalesAmount";
+            case "totalprojects":
+                return "totalProjects";
+            case "totalunits":
+                return "totalUnits";
             default:
-                LOG.warn("Invalid sort field '{}', using default 'transactionDate'", sortBy);
-                return "transactionDate";
+                LOG.warn("Invalid sort field '{}', using default 'totalSalesAmount'", sortBy);
+                return "totalSalesAmount";
         }
     }
 
@@ -328,6 +541,49 @@ public class SellerServiceImpl implements SellerService {
 
         String direction = sortDirection.toUpperCase().trim();
         return "ASC".equals(direction) ? "ASC" : "DESC";
+    }
+
+    /**
+     * Validates sort parameters for project listing.
+     */
+    private String validateProjectSortBy(String sortBy) {
+        if (sortBy == null || sortBy.trim().isEmpty()) {
+            return "createdDate"; // Default sort by creation date
+        }
+
+        String sanitized = sortBy.trim().toLowerCase();
+
+        // Check for SQL injection
+        if (SqlSecurityUtil.containsSqlInjection(sanitized)) {
+            LOG.warn("SQL injection attempt in project sort parameter: {}", sortBy);
+            return "createdDate";
+        }
+
+        // Validate safe sort field
+        if (!SqlSecurityUtil.isSafeSortField(sanitized)) {
+            LOG.warn("Unsafe project sort field: {}", sortBy);
+            return "createdDate";
+        }
+
+        // Map to allowed project sort fields
+        switch (sanitized) {
+            case "projectname":
+            case "project_name":
+                return "projectName";
+            case "amount":
+                return "amount";
+            case "createddate":
+            case "created_date":
+                return "createdDate";
+            case "status":
+                return "status";
+            case "numberofunits":
+            case "number_of_units":
+                return "numberOfUnits";
+            default:
+                LOG.warn("Invalid project sort field '{}', using default", sortBy);
+                return "createdDate";
+        }
     }
 
     /**
@@ -433,6 +689,88 @@ public class SellerServiceImpl implements SellerService {
             );
             return createErrorTransactionDetail("Mapping error: " + e.getMessage());
         }
+    }
+
+    /**
+     * Maps a database row to SellerSalesAggregateDTO.
+     */
+    private SellerSalesAggregateDTO mapToSellerSalesAggregateDTO(Object[] row) {
+        try {
+            if (row == null) {
+                LOG.warn("Row data is null for seller sales aggregate");
+                return createErrorSellerSalesAggregate("Row is null");
+            }
+
+            LOG.debug("Mapping seller sales row with {} elements: {}", row.length, java.util.Arrays.toString(row));
+
+            if (row.length < 11) {
+                LOG.warn("Row has insufficient data ({} elements), expected at least 11", row.length);
+                return createErrorSellerSalesAggregate("Insufficient data in row: " + row.length + " elements");
+            }
+
+            // Extract fields with careful parsing
+            Long sellerId = row[0] != null ? safeParseLong(row[0]) : null;
+            String sellerName = row[1] != null ? row[1].toString().trim() : "Unknown Seller";
+            String sellerPhoneNumber = row[2] != null ? row[2].toString().trim() : "";
+            String sellerEmail = row[3] != null ? row[3].toString().trim() : "";
+            Integer totalProjects = row[4] != null ? safeParseInteger(row[4]) : 0;
+            Integer totalUnits = row[5] != null ? safeParseInteger(row[5]) : 0;
+            BigDecimal totalSalesAmount = safeParseBigDecimal(row[6]);
+            BigDecimal averageFeesPerUnit = safeParseBigDecimal(row[7]);
+            BigDecimal highestProjectAmount = safeParseBigDecimal(row[8]);
+            BigDecimal lowestProjectAmount = safeParseBigDecimal(row[9]);
+            String mostRecentProjectName = row[10] != null ? row[10].toString().trim() : "No Projects";
+            Instant lastProjectDate = row[11] != null ? parseTimestamp(row[11]) : Instant.now();
+            String sellerStatus = row[12] != null ? row[12].toString().trim() : "ACTIVE";
+
+            SellerSalesAggregateDTO dto = new SellerSalesAggregateDTO(
+                sellerId,
+                sellerName,
+                sellerPhoneNumber,
+                sellerEmail,
+                totalProjects,
+                totalUnits,
+                totalSalesAmount,
+                averageFeesPerUnit,
+                highestProjectAmount,
+                lowestProjectAmount,
+                mostRecentProjectName,
+                lastProjectDate,
+                sellerStatus
+            );
+
+            LOG.debug("Successfully mapped seller sales DTO: {}", dto);
+            return dto;
+        } catch (Exception e) {
+            LOG.error(
+                "Error mapping seller sales aggregate from row: {}, error: {}",
+                row != null ? java.util.Arrays.toString(row) : "null",
+                e.getMessage(),
+                e
+            );
+            return createErrorSellerSalesAggregate("Mapping error: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Creates an error seller sales aggregate with specific error message.
+     */
+    private SellerSalesAggregateDTO createErrorSellerSalesAggregate(String errorMessage) {
+        return new SellerSalesAggregateDTO(
+            null,
+            "Error Loading Seller",
+            "",
+            "",
+            0,
+            0,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            "Error",
+            Instant.now(),
+            "ERROR"
+        );
     }
 
     /**
@@ -562,13 +900,129 @@ public class SellerServiceImpl implements SellerService {
     }
 
     /**
-     * Sanitizes input to prevent XSS and injection attacks.
+     * Enhanced input sanitization for SQL injection protection.
+     * This method provides comprehensive protection against various SQL injection attacks.
      */
     private String sanitizeInput(String input) {
         if (input == null) {
             return null;
         }
+
         // Remove potentially dangerous characters and trim whitespace
-        return input.trim().replaceAll("[<>\"']", "");
+        String sanitized = input
+            .trim()
+            .replaceAll("[<>\"'&;]", "") // Remove script injection chars
+            .replaceAll("(?i)(union|select|insert|update|delete|drop|create|alter|exec|execute)", "") // Remove SQL keywords
+            .replaceAll("--", "") // Remove SQL comments
+            .replaceAll("/\\*.*?\\*/", ""); // Remove block comments
+
+        // Limit length to prevent buffer overflow attempts
+        if (sanitized.length() > 255) {
+            LOG.warn("Input too long, truncating: original length {}", sanitized.length());
+            sanitized = sanitized.substring(0, 255);
+        }
+
+        return sanitized;
+    }/**
+     * Enhanced validation for sort parameters with strict whitelist approach and SQL injection protection.
+     */
+
+    private String validateSortBySecure(String sortBy) {
+        if (sortBy == null || sortBy.trim().isEmpty()) {
+            return "transactionDate"; // default sort
+        }
+
+        String sanitized = sortBy.trim().toLowerCase();
+
+        // Check for SQL injection attempts
+        if (SqlSecurityUtil.containsSqlInjection(sanitized)) {
+            LOG.warn("SQL injection attempt detected in sort parameter: {}", sortBy);
+            return "transactionDate";
+        }
+
+        // Validate that it's a safe sort field
+        if (!SqlSecurityUtil.isSafeSortField(sanitized)) {
+            LOG.warn("Unsafe sort field: {}", sortBy);
+            return "transactionDate";
+        }
+
+        // Map to allowed fields with strict whitelist
+        switch (sanitized) {
+            case "sellername":
+            case "seller_name":
+                return "sellerName";
+            case "amount":
+                return "amount";
+            case "transactiondate":
+            case "transaction_date":
+                return "transactionDate";
+            case "id":
+                return "id";
+            default:
+                LOG.warn("Unmapped sort field '{}', using default", sanitized);
+                return "transactionDate";
+        }
+    }
+
+    /**
+     * Maps database row to SellerProjectDTO.
+     */
+    private SellerProjectDTO mapToSellerProjectDTO(Object[] row) {
+        try {
+            if (row == null || row.length < 10) {
+                LOG.warn("Invalid project row data: length {}", row != null ? row.length : 0);
+                return createErrorSellerProject("Invalid row data");
+            }
+
+            LOG.debug("Mapping project row: {}", java.util.Arrays.toString(row));
+
+            Long projectId = safeParseLong(row[0]);
+            String projectName = row[1] != null ? row[1].toString().trim() : "Unknown Project";
+            BigDecimal amount = safeParseBigDecimal(row[2]);
+            Integer numberOfUnits = safeParseInteger(row[3]);
+            BigDecimal feesPerUnit = safeParseBigDecimal(row[4]);
+            Instant createdDate = parseTimestamp(row[5]);
+            String status = row[6] != null ? row[6].toString().trim() : "ACTIVE";
+            String description = row[7] != null ? row[7].toString().trim() : "Project description";
+            BigDecimal totalRevenue = safeParseBigDecimal(row[8]);
+            Integer daysActive = safeParseInteger(row[9]);
+
+            SellerProjectDTO dto = new SellerProjectDTO(
+                projectId,
+                projectName,
+                amount,
+                numberOfUnits,
+                feesPerUnit,
+                createdDate,
+                status,
+                description,
+                totalRevenue,
+                daysActive
+            );
+
+            LOG.debug("Successfully mapped project DTO: {}", dto);
+            return dto;
+        } catch (Exception e) {
+            LOG.error("Error mapping project from row: {}", row != null ? java.util.Arrays.toString(row) : "null", e);
+            return createErrorSellerProject("Mapping error: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Creates an error project DTO for mapping failures.
+     */
+    private SellerProjectDTO createErrorSellerProject(String errorMessage) {
+        return new SellerProjectDTO(
+            null,
+            "Error Loading Project",
+            BigDecimal.ZERO,
+            0,
+            BigDecimal.ZERO,
+            Instant.now(),
+            "ERROR",
+            errorMessage,
+            BigDecimal.ZERO,
+            0
+        );
     }
 }

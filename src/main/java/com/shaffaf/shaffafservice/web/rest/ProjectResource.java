@@ -322,7 +322,7 @@ public class ProjectResource {
             LOG.warn("Seller not found for mobile number: {} (normalized from: {})", normalizedPhone, currentUsername);
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, errorMessage);
         }
-        Seller authenticatedSeller = sellerOptional.get();
+        Seller authenticatedSeller = sellerOptional.orElseThrow();
 
         // Check if user is admin (needed for findByIdSecure call)
         boolean isAdmin = SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.ADMIN);
@@ -337,7 +337,7 @@ public class ProjectResource {
             );
         }
 
-        ProjectDTO existingProject = existingProjectOptional.get();
+        ProjectDTO existingProject = existingProjectOptional.orElseThrow();
 
         // Check if the authenticated seller is the owner of the project or if user is admin
         boolean isProjectOwner =
@@ -412,7 +412,7 @@ public class ProjectResource {
             Optional<ProjectDTO> projectDTO = projectService.findByIdSecure(id, currentUsername, isAdmin);
             if (projectDTO.isPresent()) {
                 LOG.info("Project {} retrieved successfully by user '{}' (Admin: {})", id, currentUsername, isAdmin);
-                return ResponseEntity.ok().body(projectDTO.get());
+                return ResponseEntity.ok().body(projectDTO.orElseThrow());
             } else {
                 LOG.warn("Project {} not found or not accessible for user '{}' (Admin: {})", id, currentUsername, isAdmin);
                 return ResponseEntity.notFound().build();
