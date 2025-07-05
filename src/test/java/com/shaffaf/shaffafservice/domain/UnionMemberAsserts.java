@@ -55,7 +55,8 @@ public class UnionMemberAsserts {
             .satisfies(a -> assertThat(a.getCreatedDate()).as("check createdDate").isEqualTo(expected.getCreatedDate()))
             .satisfies(a -> assertThat(a.getLastModifiedBy()).as("check lastModifiedBy").isEqualTo(expected.getLastModifiedBy()))
             .satisfies(a -> assertThat(a.getLastModifiedDate()).as("check lastModifiedDate").isEqualTo(expected.getLastModifiedDate()))
-            .satisfies(a -> assertThat(a.getDeletedOn()).as("check deletedOn").isEqualTo(expected.getDeletedOn()));
+            .satisfies(a -> assertThat(a.getDeletedOn()).as("check deletedOn").isEqualTo(expected.getDeletedOn()))
+            .satisfies(a -> assertThat(a.getIsUnionHead()).as("check isUnionHead").isEqualTo(expected.getIsUnionHead()));
     }
 
     /**

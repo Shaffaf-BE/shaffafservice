@@ -35,6 +35,8 @@ public class UnionMemberDTO implements Serializable {
 
     private Instant deletedOn;
 
+    private Boolean isUnionHead;
+
     private ProjectDTO project;
 
     public Long getId() {
@@ -117,6 +119,14 @@ public class UnionMemberDTO implements Serializable {
         this.deletedOn = deletedOn;
     }
 
+    public Boolean getIsUnionHead() {
+        return isUnionHead;
+    }
+
+    public void setIsUnionHead(Boolean isUnionHead) {
+        this.isUnionHead = isUnionHead;
+    }
+
     public ProjectDTO getProject() {
         return project;
     }
@@ -158,8 +168,8 @@ public class UnionMemberDTO implements Serializable {
             ", createdBy='" + getCreatedBy() + "'" +
             ", createdDate='" + getCreatedDate() + "'" +
             ", lastModifiedBy='" + getLastModifiedBy() + "'" +
-            ", lastModifiedDate='" + getLastModifiedDate() + "'" +
-            ", deletedOn='" + getDeletedOn() + "'" +
+            ", lastModifiedDate='" + getLastModifiedDate() + "'" +            ", deletedOn='" + getDeletedOn() + "'" +
+            ", isUnionHead='" + getIsUnionHead() + "'" +
             ", project=" + getProject() +
             "}";
     }
