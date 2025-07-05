@@ -10,7 +10,7 @@ import org.springframework.data.domain.Pageable;
  */
 public interface UnitTypeService {
     /**
-     * Save a unitType.
+     * Save a unit type.
      *
      * @param unitTypeDTO the entity to save.
      * @return the persisted entity.
@@ -18,7 +18,7 @@ public interface UnitTypeService {
     UnitTypeDTO save(UnitTypeDTO unitTypeDTO);
 
     /**
-     * Updates a unitType.
+     * Updates a unit type.
      *
      * @param unitTypeDTO the entity to update.
      * @return the persisted entity.
@@ -26,23 +26,7 @@ public interface UnitTypeService {
     UnitTypeDTO update(UnitTypeDTO unitTypeDTO);
 
     /**
-     * Partially updates a unitType.
-     *
-     * @param unitTypeDTO the entity to update partially.
-     * @return the persisted entity.
-     */
-    Optional<UnitTypeDTO> partialUpdate(UnitTypeDTO unitTypeDTO);
-
-    /**
-     * Get all the unitTypes.
-     *
-     * @param pageable the pagination information.
-     * @return the list of entities.
-     */
-    Page<UnitTypeDTO> findAll(Pageable pageable);
-
-    /**
-     * Get the "id" unitType.
+     * Get the "id" unit type.
      *
      * @param id the id of the entity.
      * @return the entity.
@@ -50,9 +34,11 @@ public interface UnitTypeService {
     Optional<UnitTypeDTO> findOne(Long id);
 
     /**
-     * Delete the "id" unitType.
+     * Get all unit types by project ID.
      *
-     * @param id the id of the entity.
+     * @param projectId the ID of the project.
+     * @param pageable the pagination information.
+     * @return the list of entities.
      */
-    void delete(Long id);
+    Page<UnitTypeDTO> findAllByProjectId(Long projectId, Pageable pageable);
 }

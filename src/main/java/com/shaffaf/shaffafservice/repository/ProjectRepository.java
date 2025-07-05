@@ -278,4 +278,20 @@ public interface ProjectRepository extends JpaRepository<Project, Long> {
         @Param("statusFilter") String statusFilter,
         @Param("sellerNameFilter") String sellerNameFilter
     );
+
+    /**
+     * Check if a seller is associated with a project using native SQL query.
+     *
+     * @param projectId the ID of the project
+     * @param sellerId the ID of the seller
+     * @return true if the seller is associated with the project, false otherwise
+     */
+    @Query(
+        value = "SELECT CASE WHEN COUNT(*) > 0 THEN TRUE ELSE FALSE END " +
+        "FROM project p " +
+        "WHERE p.id = :projectId " +
+        "AND p.seller_id = :sellerId",
+        nativeQuery = true
+    )
+    Boolean isSellerAssociatedWithProject(@Param("projectId") Long projectId, @Param("sellerId") Long sellerId);
 }

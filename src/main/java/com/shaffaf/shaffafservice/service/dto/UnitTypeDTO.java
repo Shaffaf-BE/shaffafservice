@@ -26,6 +26,8 @@ public class UnitTypeDTO implements Serializable {
 
     private Instant deletedOn;
 
+    private ProjectDTO project;
+
     public Long getId() {
         return id;
     }
@@ -80,6 +82,14 @@ public class UnitTypeDTO implements Serializable {
 
     public void setDeletedOn(Instant deletedOn) {
         this.deletedOn = deletedOn;
+    }
+
+    public ProjectDTO getProject() {
+        return project;
+    }
+
+    public void setProject(ProjectDTO project) {
+        this.project = project;
     }
 
     @Override

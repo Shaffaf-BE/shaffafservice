@@ -301,4 +301,23 @@ public interface UnionMemberRepository extends JpaRepository<UnionMember, Long> 
         nativeQuery = true
     )
     Optional<Object[]> findLatestByEmailAndProject(@Param("email") String email, @Param("projectId") Long projectId);
+
+    /**
+     * Check if a union member is associated with a project using native SQL query.
+     *
+     * @param projectId the ID of the project
+     * @param unionMemberPhoneNumber the phone number of the union member
+     * @return true if the union member is associated with the project, false otherwise
+     */
+    @Query(
+        value = "SELECT CASE WHEN COUNT(*) > 0 THEN TRUE ELSE FALSE END " +
+        "FROM union_member um " +
+        "WHERE um.phone_number = :unionMemberPhoneNumber " +
+        "AND um.project_id = :projectId",
+        nativeQuery = true
+    )
+    Boolean isUnionMemberAssociatedWithProject(
+        @Param("projectId") Long projectId,
+        @Param("unionMemberPhoneNumber") String unionMemberPhoneNumber
+    );
 }

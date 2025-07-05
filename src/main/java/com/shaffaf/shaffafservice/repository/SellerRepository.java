@@ -133,7 +133,28 @@ public interface SellerRepository extends JpaRepository<Seller, Long> {
         "AND s.status = 'ACTIVE'",
         nativeQuery = true
     )
-    Optional<Seller> findByPhoneNumber(@Param("phoneNumber") String phoneNumber);/**
+    Optional<Seller> findByPhoneNumber(@Param("phoneNumber") String phoneNumber);
+
+    /**
+     * Check if a seller is associated with a project using native SQL query.
+     *
+     * @param projectId the ID of the project
+     * @param sellerPhoneNumber the phone number of the seller
+     * @return true if the seller is associated with the project, false otherwise
+     */
+    @Query(
+        value = "SELECT CASE WHEN COUNT(*) > 0 THEN TRUE ELSE FALSE END " +
+        "FROM seller s " +
+        "INNER JOIN project p ON s.id = p.seller_id " +
+        "WHERE p.id = :projectId " +
+        "AND s.phone_number = :sellerPhoneNumber " +
+        "AND (s.deleted_on IS NULL OR s.deleted_on > now()) " +
+        "AND s.status = 'ACTIVE'",
+        nativeQuery = true
+    )
+    Boolean isSellerAssociatedWithProject(@Param("projectId") Long projectId, @Param("sellerPhoneNumber") String sellerPhoneNumber);
+
+    /**
      * Get total payment amount using native SQL.
      */
 

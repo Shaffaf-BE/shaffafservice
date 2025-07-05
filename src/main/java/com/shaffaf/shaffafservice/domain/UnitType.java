@@ -56,6 +56,23 @@ public class UnitType implements Serializable {
     @JsonIgnoreProperties(value = { "feesCollections", "unitType", "block" }, allowSetters = true)
     private Set<FeesConfiguration> feesConfigurations = new HashSet<>();
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JsonIgnoreProperties(
+        value = {
+            "sellerCommissions",
+            "projectDiscounts",
+            "unionMembers",
+            "collectors",
+            "blocks",
+            "expenseTypes",
+            "notices",
+            "complainTypes",
+            "seller",
+        },
+        allowSetters = true
+    )
+    private Project project;
+
     // jhipster-needle-entity-add-field - JHipster will add fields here
 
     public Long getId() {
@@ -208,6 +225,19 @@ public class UnitType implements Serializable {
     public UnitType removeFeesConfiguration(FeesConfiguration feesConfiguration) {
         this.feesConfigurations.remove(feesConfiguration);
         feesConfiguration.setUnitType(null);
+        return this;
+    }
+
+    public Project getProject() {
+        return this.project;
+    }
+
+    public void setProject(Project project) {
+        this.project = project;
+    }
+
+    public UnitType project(Project project) {
+        this.setProject(project);
         return this;
     }
 

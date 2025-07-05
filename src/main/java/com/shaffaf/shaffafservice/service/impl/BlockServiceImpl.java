@@ -1,10 +1,12 @@
 package com.shaffaf.shaffafservice.service.impl;
 
-import com.shaffaf.shaffafservice.repository.jdbctemplate.BlockJdbcRepository;
+import com.shaffaf.shaffafservice.domain.Block;
+import com.shaffaf.shaffafservice.repository.BlockRepository;
 import com.shaffaf.shaffafservice.security.SecurityUtils;
 import com.shaffaf.shaffafservice.service.BlockService;
 import com.shaffaf.shaffafservice.service.dto.BlockDTO;
 import com.shaffaf.shaffafservice.service.mapper.BlockMapper;
+import java.time.Instant;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,13 +24,13 @@ public class BlockServiceImpl implements BlockService {
 
     private static final Logger LOG = LoggerFactory.getLogger(BlockServiceImpl.class);
 
-    private final BlockJdbcRepository blockJdbcRepository;
+    private final BlockRepository blockRepository;
 
     private final BlockMapper blockMapper;
 
-    public BlockServiceImpl(BlockMapper blockMapper, BlockJdbcRepository blockJdbcRepository) {
+    public BlockServiceImpl(BlockMapper blockMapper, BlockRepository blockRepository) {
         this.blockMapper = blockMapper;
-        this.blockJdbcRepository = blockJdbcRepository;
+        this.blockRepository = blockRepository;
     }
 
     @Override
@@ -37,10 +39,11 @@ public class BlockServiceImpl implements BlockService {
         LOG.debug("Request to save Block : {}", blockDTO);
 
         String username = SecurityUtils.getCurrentUserLogin().orElseThrow(() -> new IllegalStateException("Current user login not found"));
+        blockDTO.setCreatedBy(username);
+        blockDTO.setCreatedDate(Instant.now());
 
-        Long id = blockJdbcRepository.saveBlock(blockDTO.getName(), blockDTO.getProject().getId(), username);
-        blockDTO.setId(id);
-        return blockDTO;
+        Block block = blockRepository.save(blockMapper.toEntity(blockDTO));
+        return blockMapper.toDto(block);
     }
 
     @Override
@@ -50,13 +53,7 @@ public class BlockServiceImpl implements BlockService {
 
         String username = SecurityUtils.getCurrentUserLogin().orElseThrow(() -> new IllegalStateException("Current user login not found"));
 
-        blockJdbcRepository.updateBlock(
-            blockDTO.getId(),
-            blockDTO.getName(),
-            blockDTO.getProject().getId(),
-            username,
-            blockDTO.getDeletedOn()
-        );
+        blockRepository.updateBlock(blockDTO.getId(), blockDTO.getName(), blockDTO.getProject().getId(), username, blockDTO.getDeletedOn());
 
         return blockDTO;
     }
@@ -65,12 +62,12 @@ public class BlockServiceImpl implements BlockService {
     @Transactional(readOnly = true)
     public Optional<BlockDTO> findOne(Long id) {
         LOG.debug("Request to get Block : {}", id);
-        return blockJdbcRepository.findById(id).map(blockMapper::toDto);
+        return blockRepository.findByIdNative(id).map(blockMapper::toDto);
     }
 
     @Override
     public Page<BlockDTO> findAllByProjectId(Long projectId, Pageable pageable) {
         LOG.debug("Request to get all Blocks by projectId : {}", projectId);
-        return blockJdbcRepository.findAllByProjectId(projectId, pageable).map(blockMapper::toDto);
+        return blockRepository.findAllByProjectIdNative(projectId, pageable).map(blockMapper::toDto);
     }
 }

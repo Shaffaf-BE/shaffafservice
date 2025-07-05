@@ -112,6 +112,11 @@ public class Project implements Serializable {
 
     @OneToMany(fetch = FetchType.LAZY, mappedBy = "project")
     @Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
+    @JsonIgnoreProperties(value = { "units", "feesConfigurations", "project" }, allowSetters = true)
+    private Set<UnitType> unitTypes = new HashSet<>();
+
+    @OneToMany(fetch = FetchType.LAZY, mappedBy = "project")
+    @Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
     @JsonIgnoreProperties(value = { "expenses", "project" }, allowSetters = true)
     private Set<ExpenseType> expenseTypes = new HashSet<>();
 
@@ -504,6 +509,37 @@ public class Project implements Serializable {
     public Project removeBlocks(Block block) {
         this.blocks.remove(block);
         block.setProject(null);
+        return this;
+    }
+
+    public Set<UnitType> getUnitTypes() {
+        return this.unitTypes;
+    }
+
+    public void setUnitTypes(Set<UnitType> unitTypes) {
+        if (this.unitTypes != null) {
+            this.unitTypes.forEach(i -> i.setProject(null));
+        }
+        if (unitTypes != null) {
+            unitTypes.forEach(i -> i.setProject(this));
+        }
+        this.unitTypes = unitTypes;
+    }
+
+    public Project unitTypes(Set<UnitType> unitTypes) {
+        this.setUnitTypes(unitTypes);
+        return this;
+    }
+
+    public Project addUnitTypes(UnitType unitType) {
+        this.unitTypes.add(unitType);
+        unitType.setProject(this);
+        return this;
+    }
+
+    public Project removeUnitTypes(UnitType unitType) {
+        this.unitTypes.remove(unitType);
+        unitType.setProject(null);
         return this;
     }
 

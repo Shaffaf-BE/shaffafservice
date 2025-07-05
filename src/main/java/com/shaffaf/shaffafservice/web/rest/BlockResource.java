@@ -1,8 +1,8 @@
 package com.shaffaf.shaffafservice.web.rest;
 
-import com.shaffaf.shaffafservice.repository.jdbctemplate.BlockJdbcRepository;
-import com.shaffaf.shaffafservice.repository.jdbctemplate.SellerJdbcRepository;
-import com.shaffaf.shaffafservice.repository.jdbctemplate.UnionMemberJdbcRepository;
+import com.shaffaf.shaffafservice.repository.BlockRepository;
+import com.shaffaf.shaffafservice.repository.SellerRepository;
+import com.shaffaf.shaffafservice.repository.UnionMemberRepository;
 import com.shaffaf.shaffafservice.security.AuthoritiesConstants;
 import com.shaffaf.shaffafservice.security.SecurityUtils;
 import com.shaffaf.shaffafservice.service.BlockService;
@@ -41,27 +41,28 @@ public class BlockResource {
     private static final Logger LOG = LoggerFactory.getLogger(BlockResource.class);
 
     private static final String ENTITY_NAME = "shaffafserviceBlock";
-    private final BlockJdbcRepository blockJdbcRepository;
 
     @Value("${jhipster.clientApp.name}")
     private String applicationName;
 
     private final BlockService blockService;
 
-    private final SellerJdbcRepository sellerJdbcRepository;
+    private final BlockRepository blockRepository;
 
-    private final UnionMemberJdbcRepository unionMemberJdbcRepository;
+    private final SellerRepository sellerRepository;
+
+    private final UnionMemberRepository unionMemberRepository;
 
     public BlockResource(
         BlockService blockService,
-        SellerJdbcRepository sellerJdbcRepository,
-        UnionMemberJdbcRepository unionMemberJdbcRepository,
-        BlockJdbcRepository blockJdbcRepository
+        BlockRepository blockRepository,
+        SellerRepository sellerRepository,
+        UnionMemberRepository unionMemberRepository
     ) {
         this.blockService = blockService;
-        this.sellerJdbcRepository = sellerJdbcRepository;
-        this.unionMemberJdbcRepository = unionMemberJdbcRepository;
-        this.blockJdbcRepository = blockJdbcRepository;
+        this.blockRepository = blockRepository;
+        this.sellerRepository = sellerRepository;
+        this.unionMemberRepository = unionMemberRepository;
     }
 
     /**
@@ -116,7 +117,7 @@ public class BlockResource {
             SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.UNION_HEAD) &&
             !SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.ADMIN)
         ) {
-            if (!unionMemberJdbcRepository.isUnionMemberAssociatedWithProject(blockDTO.getProject().getId(), phoneNumber)) {
+            if (!unionMemberRepository.isUnionMemberAssociatedWithProject(blockDTO.getProject().getId(), phoneNumber)) {
                 throw new BadRequestAlertException(
                     "Union heads can only create blocks for their own projects",
                     ENTITY_NAME,
@@ -129,7 +130,7 @@ public class BlockResource {
             SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.SELLER) &&
             !SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.ADMIN)
         ) {
-            if (!sellerJdbcRepository.isSellerAssociatedWithProject(blockDTO.getProject().getId(), phoneNumber)) {
+            if (!sellerRepository.isSellerAssociatedWithProject(blockDTO.getProject().getId(), phoneNumber)) {
                 throw new BadRequestAlertException("Sellers can only create blocks for their own projects", ENTITY_NAME, "unauthorized");
             }
         }
@@ -175,8 +176,7 @@ public class BlockResource {
         if (!Objects.equals(id, blockDTO.getId())) {
             throw new BadRequestAlertException("Invalid ID", ENTITY_NAME, "idinvalid");
         }
-
-        if (!blockJdbcRepository.existsById(id)) {
+        if (!blockRepository.existsByIdNative(id)) {
             throw new BadRequestAlertException("Entity not found", ENTITY_NAME, "idnotfound");
         }
 
@@ -201,7 +201,7 @@ public class BlockResource {
             SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.UNION_HEAD) &&
             !SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.ADMIN)
         ) {
-            if (!unionMemberJdbcRepository.isUnionMemberAssociatedWithProject(blockDTO.getProject().getId(), phoneNumber)) {
+            if (!unionMemberRepository.isUnionMemberAssociatedWithProject(blockDTO.getProject().getId(), phoneNumber)) {
                 throw new BadRequestAlertException(
                     "Union heads can only update blocks for their own projects",
                     ENTITY_NAME,
@@ -214,7 +214,7 @@ public class BlockResource {
             SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.SELLER) &&
             !SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.ADMIN)
         ) {
-            if (!sellerJdbcRepository.isSellerAssociatedWithProject(blockDTO.getProject().getId(), phoneNumber)) {
+            if (!sellerRepository.isSellerAssociatedWithProject(blockDTO.getProject().getId(), phoneNumber)) {
                 throw new BadRequestAlertException("Sellers can only update blocks for their own projects", ENTITY_NAME, "unauthorized");
             }
         }
