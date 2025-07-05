@@ -6,6 +6,7 @@ import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.*;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -27,4 +28,16 @@ public interface UnitRepository extends UnitRepositoryWithBagRelationships, JpaR
     default Page<Unit> findAllWithEagerRelationships(Pageable pageable) {
         return this.fetchBagRelationships(this.findAll(pageable));
     }
+
+    /**
+     * Check if unit number exists in a specific block.
+     */
+    @Query("SELECT COUNT(u) > 0 FROM Unit u WHERE u.unitNumber = :unitNumber AND u.block.id = :blockId AND u.deletedOn IS NULL")
+    boolean existsByUnitNumberAndBlockId(@Param("unitNumber") String unitNumber, @Param("blockId") Long blockId);
+
+    /**
+     * Find units by block and unit type with pagination.
+     */
+    @Query("SELECT u FROM Unit u WHERE u.block.id = :blockId AND u.unitType.id = :unitTypeId AND u.deletedOn IS NULL")
+    Page<Unit> findByBlockIdAndUnitTypeId(@Param("blockId") Long blockId, @Param("unitTypeId") Long unitTypeId, Pageable pageable);
 }
