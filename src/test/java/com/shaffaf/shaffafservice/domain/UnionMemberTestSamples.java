@@ -17,7 +17,8 @@ public class UnionMemberTestSamples {
             .email("email1")
             .phoneNumber("phoneNumber1")
             .createdBy("createdBy1")
-            .lastModifiedBy("lastModifiedBy1");
+            .lastModifiedBy("lastModifiedBy1")
+            .isUnionHead(true);
     }
 
     public static UnionMember getUnionMemberSample2() {
@@ -28,7 +29,8 @@ public class UnionMemberTestSamples {
             .email("email2")
             .phoneNumber("phoneNumber2")
             .createdBy("createdBy2")
-            .lastModifiedBy("lastModifiedBy2");
+            .lastModifiedBy("lastModifiedBy2")
+            .isUnionHead(false);
     }
 
     public static UnionMember getUnionMemberRandomSampleGenerator() {
@@ -39,6 +41,7 @@ public class UnionMemberTestSamples {
             .email(UUID.randomUUID().toString())
             .phoneNumber(UUID.randomUUID().toString())
             .createdBy(UUID.randomUUID().toString())
-            .lastModifiedBy(UUID.randomUUID().toString());
+            .lastModifiedBy(UUID.randomUUID().toString())
+            .isUnionHead(random.nextBoolean());
     }
 }
