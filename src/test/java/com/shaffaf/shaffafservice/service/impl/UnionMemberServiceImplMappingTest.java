@@ -23,7 +23,7 @@ class UnionMemberServiceImplMappingTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        service = new UnionMemberServiceImpl(null, null);
+        service = new UnionMemberServiceImpl(null, null, null);
 
         // Access the private method for testing
         mapObjectArrayToDTOMethod = UnionMemberServiceImpl.class.getDeclaredMethod("mapObjectArrayToDTO", Object[].class);

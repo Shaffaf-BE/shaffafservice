@@ -89,6 +89,72 @@ public interface UnionMemberRepository extends JpaRepository<UnionMember, Long> 
         @Param("sortBy") String sortBy,
         @Param("sortDirection") String sortDirection,
         Pageable pageable
+    );
+
+    /**
+     * Check if a project is owned by a specific seller.
+     */
+    @Query(
+        value = """
+        SELECT COUNT(*) > 0
+        FROM project p
+        WHERE p.id = :projectId AND p.seller_id = :sellerId AND p.deleted_date IS NULL
+        """,
+        nativeQuery = true
+    )
+    boolean isProjectOwnedBySeller(@Param("projectId") Long projectId, @Param("sellerId") Long sellerId);
+
+    /**
+     * Find all union members by seller's projects using native SQL with pagination.
+     */
+    @Query(
+        value = """
+        SELECT um.id, um.first_name, um.last_name, um.email, um.phone_number,
+               um.created_by, um.created_date, um.last_modified_by, um.last_modified_date,
+               um.deleted_on, um.is_union_head, um.project_id,
+               p.name as project_name, p.description as project_description
+        FROM union_member um
+        INNER JOIN project p ON um.project_id = p.id
+        WHERE p.seller_id = :sellerId
+        AND um.deleted_on IS NULL
+        AND p.deleted_date IS NULL
+        ORDER BY
+            CASE WHEN :sortDirection = 'asc' THEN
+                CASE
+                    WHEN :sortBy = 'firstName' THEN um.first_name
+                    WHEN :sortBy = 'lastName' THEN um.last_name
+                    WHEN :sortBy = 'email' THEN um.email
+                    WHEN :sortBy = 'phoneNumber' THEN um.phone_number
+                    WHEN :sortBy = 'createdDate' THEN um.created_date::text
+                    ELSE um.id::text
+                END
+            END ASC,
+            CASE WHEN :sortDirection = 'desc' THEN
+                CASE
+                    WHEN :sortBy = 'firstName' THEN um.first_name
+                    WHEN :sortBy = 'lastName' THEN um.last_name
+                    WHEN :sortBy = 'email' THEN um.email
+                    WHEN :sortBy = 'phoneNumber' THEN um.phone_number
+                    WHEN :sortBy = 'createdDate' THEN um.created_date::text
+                    ELSE um.id::text
+                END
+            END DESC
+        """,
+        countQuery = """
+        SELECT COUNT(um.id)
+        FROM union_member um
+        INNER JOIN project p ON um.project_id = p.id
+        WHERE p.seller_id = :sellerId
+        AND um.deleted_on IS NULL
+        AND p.deleted_date IS NULL
+        """,
+        nativeQuery = true
+    )
+    Page<Object[]> findAllUnionMembersNativeBySellerProjects(
+        @Param("sellerId") Long sellerId,
+        @Param("sortBy") String sortBy,
+        @Param("sortDirection") String sortDirection,
+        Pageable pageable
     );/**
      * Get the next sequence value for union_member_seq.
      */

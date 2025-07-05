@@ -332,7 +332,7 @@ public class UnionMemberResource {
 
     /**
      * {@code GET  /union-members/project/{projectId}} : get all union members for a specific project using native SQL with pagination.
-     * Restricted to ADMIN and SELLER roles only.
+     * Restricted to ADMIN and SELLER roles only. Sellers can only access their own projects.
      *
      * @param projectId the project ID to filter by.
      * @param pageable the pagination information.
@@ -350,14 +350,21 @@ public class UnionMemberResource {
             throw new BadRequestAlertException("Project ID is required", ENTITY_NAME, "projectidrequired");
         }
 
-        Page<UnionMemberDTO> page = unionMemberService.findUnionMembersByProjectNative(projectId, pageable);
-        HttpHeaders headers = PaginationUtil.generatePaginationHttpHeaders(ServletUriComponentsBuilder.fromCurrentRequest(), page);
-        return ResponseEntity.ok().headers(headers).body(page.getContent());
+        String currentUserLogin = SecurityUtils.getCurrentUserLogin()
+            .orElseThrow(() -> new BadRequestAlertException("Current user login not found", ENTITY_NAME, "usernotfound"));
+
+        try {
+            Page<UnionMemberDTO> page = unionMemberService.findUnionMembersByProjectNativeFiltered(projectId, pageable, currentUserLogin);
+            HttpHeaders headers = PaginationUtil.generatePaginationHttpHeaders(ServletUriComponentsBuilder.fromCurrentRequest(), page);
+            return ResponseEntity.ok().headers(headers).body(page.getContent());
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestAlertException(e.getMessage(), ENTITY_NAME, "accessdenied");
+        }
     }
 
     /**
      * {@code GET  /union-members/native} : get all union members using native SQL with pagination and sorting.
-     * Restricted to ADMIN and SELLER roles only.
+     * Restricted to ADMIN and SELLER roles only. Sellers can only access union members from their own projects.
      *
      * @param pageable the pagination information.
      * @return the {@link ResponseEntity} with status {@code 200 (OK)} and the list of union members in body.
@@ -368,8 +375,16 @@ public class UnionMemberResource {
         @org.springdoc.core.annotations.ParameterObject Pageable pageable
     ) {
         LOG.debug("REST request to get all UnionMembers using native SQL");
-        Page<UnionMemberDTO> page = unionMemberService.findAllUnionMembersNative(pageable);
-        HttpHeaders headers = PaginationUtil.generatePaginationHttpHeaders(ServletUriComponentsBuilder.fromCurrentRequest(), page);
-        return ResponseEntity.ok().headers(headers).body(page.getContent());
+
+        String currentUserLogin = SecurityUtils.getCurrentUserLogin()
+            .orElseThrow(() -> new BadRequestAlertException("Current user login not found", ENTITY_NAME, "usernotfound"));
+
+        try {
+            Page<UnionMemberDTO> page = unionMemberService.findAllUnionMembersNativeFiltered(pageable, currentUserLogin);
+            HttpHeaders headers = PaginationUtil.generatePaginationHttpHeaders(ServletUriComponentsBuilder.fromCurrentRequest(), page);
+            return ResponseEntity.ok().headers(headers).body(page.getContent());
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestAlertException(e.getMessage(), ENTITY_NAME, "accessdenied");
+        }
     }
 }

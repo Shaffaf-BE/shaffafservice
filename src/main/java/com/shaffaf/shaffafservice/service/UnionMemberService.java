@@ -111,4 +111,25 @@ public interface UnionMemberService {
      * @return the list of entities
      */
     Page<UnionMemberDTO> findAllUnionMembersNative(Pageable pageable);
+
+    /**
+     * Get all union members for a specific project using native SQL with pagination,
+     * filtered by seller ownership if the current user is a seller.
+     *
+     * @param projectId the project ID
+     * @param pageable the pagination information
+     * @param currentUserLogin the current user login
+     * @return the list of entities
+     */
+    Page<UnionMemberDTO> findUnionMembersByProjectNativeFiltered(Long projectId, Pageable pageable, String currentUserLogin);
+
+    /**
+     * Get all union members using native SQL with pagination and sorting,
+     * filtered by seller ownership if the current user is a seller.
+     *
+     * @param pageable the pagination information
+     * @param currentUserLogin the current user login
+     * @return the list of entities
+     */
+    Page<UnionMemberDTO> findAllUnionMembersNativeFiltered(Pageable pageable, String currentUserLogin);
 }

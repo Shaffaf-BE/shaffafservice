@@ -1,7 +1,11 @@
 package com.shaffaf.shaffafservice.service.impl;
 
+import com.shaffaf.shaffafservice.domain.Seller;
 import com.shaffaf.shaffafservice.domain.UnionMember;
+import com.shaffaf.shaffafservice.repository.SellerRepository;
 import com.shaffaf.shaffafservice.repository.UnionMemberRepository;
+import com.shaffaf.shaffafservice.security.AuthoritiesConstants;
+import com.shaffaf.shaffafservice.security.SecurityUtils;
 import com.shaffaf.shaffafservice.service.UnionMemberService;
 import com.shaffaf.shaffafservice.service.dto.UnionMemberDTO;
 import com.shaffaf.shaffafservice.service.mapper.UnionMemberMapper;
@@ -29,9 +33,16 @@ public class UnionMemberServiceImpl implements UnionMemberService {
 
     private final UnionMemberMapper unionMemberMapper;
 
-    public UnionMemberServiceImpl(UnionMemberRepository unionMemberRepository, UnionMemberMapper unionMemberMapper) {
+    private final SellerRepository sellerRepository;
+
+    public UnionMemberServiceImpl(
+        UnionMemberRepository unionMemberRepository,
+        UnionMemberMapper unionMemberMapper,
+        SellerRepository sellerRepository
+    ) {
         this.unionMemberRepository = unionMemberRepository;
         this.unionMemberMapper = unionMemberMapper;
+        this.sellerRepository = sellerRepository;
     }
 
     @Override
@@ -288,20 +299,90 @@ public class UnionMemberServiceImpl implements UnionMemberService {
     public Page<UnionMemberDTO> findAllUnionMembersNative(Pageable pageable) {
         LOG.debug("Request to get all UnionMembers using native SQL : pageable={}", pageable);
 
-        // Extract sort information
-        String sortBy = "createdDate";
-        String sortDirection = "DESC";
+        // Extract sort information from pageable
+        String sortBy = "id"; // default sort
+        String sortDirection = "asc"; // default direction
 
         if (pageable.getSort().isSorted()) {
             Sort.Order order = pageable.getSort().iterator().next();
             sortBy = order.getProperty();
-            sortDirection = order.getDirection().name();
+            sortDirection = order.getDirection().name().toLowerCase();
         }
 
         Page<Object[]> resultPage = unionMemberRepository.findAllUnionMembersNative(sortBy, sortDirection, pageable);
 
         return resultPage.map(this::mapObjectArrayToDTO);
-    }/**
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<UnionMemberDTO> findUnionMembersByProjectNativeFiltered(Long projectId, Pageable pageable, String currentUserLogin) {
+        LOG.debug(
+            "Request to get UnionMembers by project using native SQL with seller filtering : projectId={}, currentUserLogin={}",
+            projectId,
+            currentUserLogin
+        );
+
+        // Check if current user is a seller
+        if (SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.SELLER)) {
+            // Verify that the seller owns the project
+            Optional<Seller> seller = sellerRepository.findByPhoneNumber(currentUserLogin);
+            if (seller.isPresent()) {
+                // Check if the project belongs to this seller
+                if (!unionMemberRepository.isProjectOwnedBySeller(projectId, seller.get().getId())) {
+                    LOG.warn("Seller {} attempted to access project {} which they don't own", currentUserLogin, projectId);
+                    throw new IllegalArgumentException("Access denied: You don't have permission to view union members for this project");
+                }
+            } else {
+                LOG.warn("Seller not found for login: {}", currentUserLogin);
+                throw new IllegalArgumentException("Seller not found");
+            }
+        }
+
+        // If user is admin or seller with valid project access, proceed with normal query
+        return findUnionMembersByProjectNative(projectId, pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<UnionMemberDTO> findAllUnionMembersNativeFiltered(Pageable pageable, String currentUserLogin) {
+        LOG.debug("Request to get all UnionMembers using native SQL with seller filtering : currentUserLogin={}", currentUserLogin);
+
+        // Check if current user is a seller
+        if (SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.SELLER)) {
+            // Find seller and get their projects' union members only
+            Optional<Seller> seller = sellerRepository.findByPhoneNumber(currentUserLogin);
+            if (seller.isPresent()) {
+                LOG.debug("Filtering union members for seller ID: {}", seller.get().getId());
+
+                // Extract sort information from pageable
+                String sortBy = "id"; // default sort
+                String sortDirection = "asc"; // default direction
+
+                if (pageable.getSort().isSorted()) {
+                    Sort.Order order = pageable.getSort().iterator().next();
+                    sortBy = order.getProperty();
+                    sortDirection = order.getDirection().name().toLowerCase();
+                }
+
+                Page<Object[]> resultPage = unionMemberRepository.findAllUnionMembersNativeBySellerProjects(
+                    seller.get().getId(),
+                    sortBy,
+                    sortDirection,
+                    pageable
+                );
+                return resultPage.map(this::mapObjectArrayToDTO);
+            } else {
+                LOG.warn("Seller not found for login: {}", currentUserLogin);
+                throw new IllegalArgumentException("Seller not found");
+            }
+        }
+
+        // If user is admin, return all union members
+        return findAllUnionMembersNative(pageable);
+    }
+
+    /**
      * Helper method to map Object[] from native query to UnionMemberDTO.
      */
 
