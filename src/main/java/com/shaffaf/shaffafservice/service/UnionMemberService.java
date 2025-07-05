@@ -55,4 +55,60 @@ public interface UnionMemberService {
      * @param id the id of the entity.
      */
     void delete(Long id);
+
+    // Native SQL-based methods for secure operations
+
+    /**
+     * Save a new union member using native SQL.
+     *
+     * @param unionMemberDTO the entity to save
+     * @param currentUserLogin the current user login
+     * @return the saved entity
+     */
+    UnionMemberDTO saveUnionMemberNative(UnionMemberDTO unionMemberDTO, String currentUserLogin);
+
+    /**
+     * Save a new union head using native SQL, ensuring only one head per project.
+     *
+     * @param unionMemberDTO the entity to save (with isUnionHead = true)
+     * @param currentUserLogin the current user login
+     * @return the saved entity
+     * @throws IllegalStateException if a union head already exists for the project
+     */
+    UnionMemberDTO saveUnionHeadNative(UnionMemberDTO unionMemberDTO, String currentUserLogin);
+
+    /**
+     * Update a union member using native SQL.
+     *
+     * @param id the id of the entity to update
+     * @param unionMemberDTO the entity data to update
+     * @param currentUserLogin the current user login
+     * @return the updated entity
+     */
+    Optional<UnionMemberDTO> updateUnionMemberNative(Long id, UnionMemberDTO unionMemberDTO, String currentUserLogin);
+
+    /**
+     * Find a union member by ID using native SQL.
+     *
+     * @param id the id of the entity
+     * @return the entity
+     */
+    Optional<UnionMemberDTO> findOneNative(Long id);
+
+    /**
+     * Get all union members for a specific project using native SQL with pagination.
+     *
+     * @param projectId the project ID
+     * @param pageable the pagination information
+     * @return the list of entities
+     */
+    Page<UnionMemberDTO> findUnionMembersByProjectNative(Long projectId, Pageable pageable);
+
+    /**
+     * Get all union members using native SQL with pagination and sorting.
+     *
+     * @param pageable the pagination information
+     * @return the list of entities
+     */
+    Page<UnionMemberDTO> findAllUnionMembersNative(Pageable pageable);
 }

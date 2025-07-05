@@ -1,6 +1,8 @@
 package com.shaffaf.shaffafservice.web.rest.errors;
 
 import java.net.URI;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.ErrorResponseException;
 import tech.jhipster.web.rest.errors.ProblemDetailWithCause;
@@ -10,6 +12,7 @@ import tech.jhipster.web.rest.errors.ProblemDetailWithCause.ProblemDetailWithCau
 public class BadRequestAlertException extends ErrorResponseException {
 
     private static final long serialVersionUID = 1L;
+    private static final Logger LOG = LoggerFactory.getLogger(BadRequestAlertException.class);
 
     private final String entityName;
 
@@ -25,7 +28,8 @@ public class BadRequestAlertException extends ErrorResponseException {
             ProblemDetailWithCauseBuilder.instance()
                 .withStatus(HttpStatus.BAD_REQUEST.value())
                 .withType(type)
-                .withTitle(defaultMessage)
+                .withTitle("Bad Request")
+                .withDetail(defaultMessage != null ? defaultMessage : "Bad Request")
                 .withProperty("message", "error." + errorKey)
                 .withProperty("params", entityName)
                 .build(),
@@ -33,6 +37,15 @@ public class BadRequestAlertException extends ErrorResponseException {
         );
         this.entityName = entityName;
         this.errorKey = errorKey;
+
+        // Log the exception details for debugging
+        LOG.debug(
+            "BadRequestAlertException created - defaultMessage: '{}', entityName: '{}', errorKey: '{}', detail: '{}'",
+            defaultMessage,
+            entityName,
+            errorKey,
+            this.getBody().getDetail()
+        );
     }
 
     public String getEntityName() {

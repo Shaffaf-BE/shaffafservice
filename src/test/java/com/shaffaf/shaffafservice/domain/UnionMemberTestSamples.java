@@ -15,7 +15,7 @@ public class UnionMemberTestSamples {
             .firstName("firstName1")
             .lastName("lastName1")
             .email("email1")
-            .phoneNumber("phoneNumber1")
+            .phoneNumber("+923311234567")
             .createdBy("createdBy1")
             .lastModifiedBy("lastModifiedBy1")
             .isUnionHead(true);
@@ -27,7 +27,7 @@ public class UnionMemberTestSamples {
             .firstName("firstName2")
             .lastName("lastName2")
             .email("email2")
-            .phoneNumber("phoneNumber2")
+            .phoneNumber("+923327654321")
             .createdBy("createdBy2")
             .lastModifiedBy("lastModifiedBy2")
             .isUnionHead(false);
@@ -39,7 +39,7 @@ public class UnionMemberTestSamples {
             .firstName(UUID.randomUUID().toString())
             .lastName(UUID.randomUUID().toString())
             .email(UUID.randomUUID().toString())
-            .phoneNumber(UUID.randomUUID().toString())
+            .phoneNumber("+9233" + String.format("%08d", random.nextInt(100000000)))
             .createdBy(UUID.randomUUID().toString())
             .lastModifiedBy(UUID.randomUUID().toString())
             .isUnionHead(random.nextBoolean());
