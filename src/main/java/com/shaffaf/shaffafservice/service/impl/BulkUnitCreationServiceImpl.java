@@ -16,6 +16,9 @@ import com.shaffaf.shaffafservice.service.BulkUnitCreationService;
 import com.shaffaf.shaffafservice.service.dto.BulkUnitCreationItemDTO;
 import com.shaffaf.shaffafservice.service.dto.BulkUnitCreationRequestDTO;
 import com.shaffaf.shaffafservice.service.dto.BulkUnitCreationResponseDTO;
+import com.shaffaf.shaffafservice.service.dto.BulkUnitInfoDTO;
+import java.math.BigInteger;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -24,6 +27,9 @@ import java.util.Optional;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -68,26 +74,22 @@ public class BulkUnitCreationServiceImpl implements BulkUnitCreationService {
         validateBulkCreationItems(request.getItems());
 
         // Process creation
-        List<String> createdBlocks = new ArrayList<>();
-        List<String> createdUnitTypes = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         int totalUnitsCreated = 0;
 
         Instant now = Instant.now();
 
+        // Track newly created blocks and unit types
+        Set<String> newlyCreatedBlockNames = new HashSet<>();
+        Set<String> newlyCreatedUnitTypeNames = new HashSet<>();
+
         for (BulkUnitCreationItemDTO item : request.getItems()) {
             try {
                 // Get or create Block
-                Block block = getOrCreateBlock(item.getBlock(), project, currentUserLogin, now);
-                if (!createdBlocks.contains(block.getName())) {
-                    createdBlocks.add(block.getName());
-                }
+                Block block = getOrCreateBlock(item.getBlock(), project, currentUserLogin, now, newlyCreatedBlockNames);
 
                 // Get or create UnitType
-                UnitType unitType = getOrCreateUnitType(item.getUnitType(), currentUserLogin, now);
-                if (!createdUnitTypes.contains(unitType.getName())) {
-                    createdUnitTypes.add(unitType.getName());
-                }
+                UnitType unitType = getOrCreateUnitType(item.getUnitType(), currentUserLogin, now, newlyCreatedUnitTypeNames);
 
                 // Create Units in range
                 int unitsCreatedForItem = createUnitsInRange(item, block, unitType, currentUserLogin, now, warnings);
@@ -106,6 +108,10 @@ public class BulkUnitCreationServiceImpl implements BulkUnitCreationService {
                 );
             }
         }
+
+        // Convert sets to lists for response
+        List<String> createdBlocks = new ArrayList<>(newlyCreatedBlockNames);
+        List<String> createdUnitTypes = new ArrayList<>(newlyCreatedUnitTypeNames);
 
         String message = String.format(
             "Successfully created %d units across %d blocks and %d unit types",
@@ -183,7 +189,13 @@ public class BulkUnitCreationServiceImpl implements BulkUnitCreationService {
         }
     }
 
-    private Block getOrCreateBlock(String blockName, Project project, String currentUserLogin, Instant now) {
+    private Block getOrCreateBlock(
+        String blockName,
+        Project project,
+        String currentUserLogin,
+        Instant now,
+        Set<String> newlyCreatedBlockNames
+    ) {
         Optional<Block> existingBlock = blockRepository.findByNameAndProjectId(blockName, project.getId());
 
         if (existingBlock.isPresent()) {
@@ -197,10 +209,12 @@ public class BulkUnitCreationServiceImpl implements BulkUnitCreationService {
         newBlock.setCreatedBy(currentUserLogin);
         newBlock.setCreatedDate(now);
 
-        return blockRepository.save(newBlock);
+        Block savedBlock = blockRepository.save(newBlock);
+        newlyCreatedBlockNames.add(blockName);
+        return savedBlock;
     }
 
-    private UnitType getOrCreateUnitType(String unitTypeName, String currentUserLogin, Instant now) {
+    private UnitType getOrCreateUnitType(String unitTypeName, String currentUserLogin, Instant now, Set<String> newlyCreatedUnitTypeNames) {
         Optional<UnitType> existingUnitType = unitTypeRepository.findByName(unitTypeName);
 
         if (existingUnitType.isPresent()) {
@@ -213,7 +227,9 @@ public class BulkUnitCreationServiceImpl implements BulkUnitCreationService {
         newUnitType.setCreatedBy(currentUserLogin);
         newUnitType.setCreatedDate(now);
 
-        return unitTypeRepository.save(newUnitType);
+        UnitType savedUnitType = unitTypeRepository.save(newUnitType);
+        newlyCreatedUnitTypeNames.add(unitTypeName);
+        return savedUnitType;
     }
 
     private int createUnitsInRange(
@@ -248,5 +264,81 @@ public class BulkUnitCreationServiceImpl implements BulkUnitCreationService {
         }
 
         return unitsCreated;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<BulkUnitInfoDTO> getAllUnitsForProject(Long projectId, Pageable pageable, String currentUserLogin) {
+        LOG.debug("Request to get all units for project: {} by user: {}", projectId, currentUserLogin);
+
+        // Validate project exists
+        if (!projectRepository.existsById(projectId)) {
+            throw new IllegalArgumentException("Project not found with ID: " + projectId);
+        }
+
+        // Check user permissions
+        boolean isSeller = SecurityUtils.hasCurrentUserThisAuthority(AuthoritiesConstants.SELLER);
+        Page<Object[]> resultPage;
+
+        if (isSeller) {
+            // For sellers, validate they own the project
+            LOG.debug("Seller user detected, validating project ownership");
+
+            Optional<Seller> sellerOpt = sellerRepository.findByPhoneNumber(currentUserLogin);
+            if (sellerOpt.isEmpty()) {
+                throw new IllegalArgumentException("Seller not found with phone number: " + currentUserLogin);
+            }
+
+            Seller seller = sellerOpt.get();
+
+            // Check if seller owns the project
+            if (!unitRepository.isProjectOwnedBySellerNative(projectId, seller.getId())) {
+                throw new SecurityException("Access denied: You can only view units for your own projects");
+            }
+
+            // Get units for seller's project
+            resultPage = unitRepository.findAllUnitsWithDetailsNativeBySellerProject(projectId, seller.getId(), pageable);
+        } else {
+            // Admin can access any project
+            LOG.debug("Admin user detected, allowing access to project: {}", projectId);
+            resultPage = unitRepository.findAllUnitsWithDetailsNativeByProject(projectId, pageable);
+        }
+
+        // Convert Object[] results to DTOs
+        List<BulkUnitInfoDTO> units = resultPage.getContent().stream().map(this::mapToUnitInfoDTO).toList();
+
+        return new PageImpl<>(units, pageable, resultPage.getTotalElements());
+    }
+
+    /**
+     * Maps Object[] result from native query to BulkUnitInfoDTO.
+     */
+    private BulkUnitInfoDTO mapToUnitInfoDTO(Object[] row) {
+        return new BulkUnitInfoDTO(
+            convertToLong(row[0]), // unit_id
+            (String) row[1], // unit_number
+            convertToLong(row[2]), // block_id
+            (String) row[3], // block_name
+            convertToLong(row[4]), // unit_type_id
+            (String) row[5], // unit_type_name
+            convertToLong(row[6]), // project_id
+            (String) row[7], // project_name
+            (String) row[8], // created_by
+            ((Timestamp) row[9]).toInstant() // created_date
+        );
+    }
+
+    /**
+     * Converts numeric values from native query to Long, handling both BigInteger and Long types.
+     */
+    private Long convertToLong(Object value) {
+        if (value instanceof BigInteger) {
+            return ((BigInteger) value).longValue();
+        } else if (value instanceof Long) {
+            return (Long) value;
+        } else if (value instanceof Integer) {
+            return ((Integer) value).longValue();
+        }
+        throw new IllegalArgumentException("Cannot convert " + value.getClass().getSimpleName() + " to Long");
     }
 }

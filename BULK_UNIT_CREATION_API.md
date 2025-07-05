@@ -2,7 +2,12 @@
 
 ## Overview
 
-The Bulk Unit Creation API allows authorized users to create multiple units, blocks, and unit types in a single request. This API is designed to streamline the process of setting up large residential projects with multiple units across different blocks and unit types.
+The Bulk Unit Creation API provides comprehensive functionality for managing units in residential projects. It offers two main endpoints:
+
+1. **Bulk Creation (POST)**: Allows authorized users to create multiple units, blocks, and unit types in a single request
+2. **Unit Retrieval (GET)**: Enables users to retrieve all units for a specific project with detailed information
+
+This API is designed to streamline the process of setting up large residential projects and provides efficient access to unit information with proper access control and pagination support.
 
 ## Authentication & Authorization
 
@@ -16,7 +21,7 @@ The Bulk Unit Creation API allows authorized users to create multiple units, blo
 - Bearer Token authentication required
 - For sellers: Username must match seller's phone number in the system
 
-## API Endpoint
+## API Endpoints
 
 ### Create Units in Bulk
 
@@ -27,6 +32,21 @@ The Bulk Unit Creation API allows authorized users to create multiple units, blo
 **Content-Type:** `application/json`
 
 **Authorization:** Requires `ROLE_ADMIN` or `ROLE_SELLER`
+
+### Get All Units for Project
+
+**Endpoint:** `GET /api/bulk-unit-creation/v1/units/project/{projectId}`
+
+**Description:** Retrieves all units with their block, unit type, and project information for a specific project.
+
+**Authorization:** Requires `ROLE_ADMIN` or `ROLE_SELLER`
+
+**Parameters:**
+
+- `projectId` (path parameter): ID of the project to retrieve units for
+- `page` (query parameter, optional): Page number (0-based, default: 0)
+- `size` (query parameter, optional): Page size (default: 20)
+- `sort` (query parameter, optional): Sort criteria (default: blockName,unitTypeName,unitNumber)
 
 ---
 
@@ -161,6 +181,93 @@ The Bulk Unit Creation API allows authorized users to create multiple units, blo
 
 ---
 
+## GET Response Format
+
+### Success Response for Get Units (HTTP 200)
+
+```json
+{
+  "content": [
+    {
+      "unitId": 1,
+      "unitNumber": "101",
+      "blockId": 1,
+      "blockName": "Block A",
+      "unitTypeId": 1,
+      "unitTypeName": "2BHK",
+      "projectId": 123,
+      "projectName": "Green Valley Residency",
+      "createdBy": "admin",
+      "createdDate": "2025-07-05T10:30:00Z"
+    },
+    {
+      "unitId": 2,
+      "unitNumber": "102",
+      "blockId": 1,
+      "blockName": "Block A",
+      "unitTypeId": 1,
+      "unitTypeName": "2BHK",
+      "projectId": 123,
+      "projectName": "Green Valley Residency",
+      "createdBy": "admin",
+      "createdDate": "2025-07-05T10:30:00Z"
+    }
+  ],
+  "pageable": {
+    "pageNumber": 0,
+    "pageSize": 20,
+    "sort": {
+      "sorted": true,
+      "empty": false,
+      "unsorted": false
+    },
+    "offset": 0,
+    "paged": true,
+    "unpaged": false
+  },
+  "totalElements": 50,
+  "totalPages": 3,
+  "last": false,
+  "first": true,
+  "size": 20,
+  "number": 0,
+  "sort": {
+    "sorted": true,
+    "empty": false,
+    "unsorted": false
+  },
+  "numberOfElements": 20,
+  "empty": false
+}
+```
+
+### GET Response Field Descriptions
+
+| Field                    | Type    | Description                                    |
+| ------------------------ | ------- | ---------------------------------------------- |
+| `content`                | array   | List of unit information objects               |
+| `content[].unitId`       | number  | Unique identifier of the unit                  |
+| `content[].unitNumber`   | string  | Unit number (e.g., "101", "A-202")             |
+| `content[].blockId`      | number  | Unique identifier of the block                 |
+| `content[].blockName`    | string  | Name of the block                              |
+| `content[].unitTypeId`   | number  | Unique identifier of the unit type             |
+| `content[].unitTypeName` | string  | Name of the unit type (e.g., "2BHK", "Studio") |
+| `content[].projectId`    | number  | Unique identifier of the project               |
+| `content[].projectName`  | string  | Name of the project                            |
+| `content[].createdBy`    | string  | Username of the user who created the unit      |
+| `content[].createdDate`  | string  | ISO 8601 timestamp when unit was created       |
+| `pageable`               | object  | Pagination information                         |
+| `totalElements`          | number  | Total number of units across all pages         |
+| `totalPages`             | number  | Total number of pages                          |
+| `last`                   | boolean | Whether this is the last page                  |
+| `first`                  | boolean | Whether this is the first page                 |
+| `size`                   | number  | Number of elements per page                    |
+| `number`                 | number  | Current page number (0-based)                  |
+| `numberOfElements`       | number  | Number of elements in current page             |
+| `empty`                  | boolean | Whether the page is empty                      |
+
+---
+
 ## Error Responses
 
 ### 400 Bad Request - Validation Errors
@@ -259,6 +366,30 @@ The Bulk Unit Creation API allows authorized users to create multiple units, blo
 }
 ```
 
+### 404 Not Found - Project Not Found (GET)
+
+```json
+{
+  "type": "about:blank",
+  "title": "Not Found",
+  "status": 404,
+  "detail": "Project not found with ID: 999",
+  "instance": "/api/bulk-unit-creation/v1/units/project/999"
+}
+```
+
+### 403 Forbidden - Seller Access Violation (GET)
+
+```json
+{
+  "type": "about:blank",
+  "title": "Forbidden",
+  "status": 403,
+  "detail": "Access denied: You don't have permission to view units for this project",
+  "instance": "/api/bulk-unit-creation/v1/units/project/123"
+}
+```
+
 ### 500 Internal Server Error
 
 ```json
@@ -319,6 +450,30 @@ curl -X POST \
       }
     ]
   }'
+```
+
+### Example 3: Admin Getting All Units for a Project
+
+```bash
+curl -X GET \
+  'https://api.shaffaf.com/api/bulk-unit-creation/v1/units/project/123' \
+  -H 'Authorization: Bearer <admin-token>'
+```
+
+### Example 4: Seller Getting Units for Own Project with Pagination
+
+```bash
+curl -X GET \
+  'https://api.shaffaf.com/api/bulk-unit-creation/v1/units/project/456?page=0&size=10&sort=blockName,unitNumber' \
+  -H 'Authorization: Bearer <seller-token>'
+```
+
+### Example 5: Get Units with Custom Sorting
+
+```bash
+curl -X GET \
+  'https://api.shaffaf.com/api/bulk-unit-creation/v1/units/project/123?sort=unitTypeName,desc&sort=unitNumber,asc' \
+  -H 'Authorization: Bearer <admin-token>'
 ```
 
 ---
@@ -407,9 +562,12 @@ curl -X POST \
 
 ## Version History
 
-| Version | Date       | Changes                    |
-| ------- | ---------- | -------------------------- |
-| v1.0    | 2025-07-05 | Initial API implementation |
+| Version | Date       | Changes                                                            |
+| ------- | ---------- | ------------------------------------------------------------------ |
+| v1.0    | 2025-07-05 | Initial API implementation (POST endpoint)                         |
+| v1.1    | 2025-07-05 | Fixed database column references for consistent entity mapping     |
+| v1.2    | 2025-07-05 | Fixed type casting issues in native SQL result mapping             |
+| v1.3    | 2025-07-05 | Added GET endpoint for retrieving units by project with pagination |
 
 ---
 
