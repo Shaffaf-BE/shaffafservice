@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:ext="http://www.liquibase.org/xml/ns/dbchangelog-ext"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd
+                        http://www.liquibase.org/xml/ns/dbchangelog-ext http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-ext.xsd">
+
+    <!--
+        Added the column is_union_head to the entity UnionMember.
+    -->
+    <changeSet id="20250705000001-3" author="developer">
+        <addColumn tableName="union_member">
+            <column name="is_union_head" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false" />
+            </column>
+        </addColumn>
+        
+        <!-- Add a comment explaining the purpose of this column -->
+        <sql>
+            COMMENT ON COLUMN union_member.is_union_head IS 'Indicates whether this union member is the head of the union';
+        </sql>
+        
+        <!-- Create an index for better query performance when filtering by union heads -->
+        <createIndex indexName="idx_union_member_is_union_head" tableName="union_member">
+            <column name="is_union_head"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

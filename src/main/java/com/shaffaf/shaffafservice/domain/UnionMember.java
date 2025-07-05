@@ -56,6 +56,9 @@ public class UnionMember implements Serializable {
     @Column(name = "deleted_on")
     private Instant deletedOn;
 
+    @Column(name = "is_union_head", nullable = false)
+    private Boolean isUnionHead = false;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JsonIgnoreProperties(
         value = {
@@ -205,6 +208,19 @@ public class UnionMember implements Serializable {
         this.deletedOn = deletedOn;
     }
 
+    public Boolean getIsUnionHead() {
+        return this.isUnionHead;
+    }
+
+    public UnionMember isUnionHead(Boolean isUnionHead) {
+        this.setIsUnionHead(isUnionHead);
+        return this;
+    }
+
+    public void setIsUnionHead(Boolean isUnionHead) {
+        this.isUnionHead = isUnionHead;
+    }
+
     public Project getProject() {
         return this.project;
     }
@@ -251,6 +267,7 @@ public class UnionMember implements Serializable {
             ", lastModifiedBy='" + getLastModifiedBy() + "'" +
             ", lastModifiedDate='" + getLastModifiedDate() + "'" +
             ", deletedOn='" + getDeletedOn() + "'" +
+            ", isUnionHead='" + getIsUnionHead() + "'" +
             "}";
     }
 }

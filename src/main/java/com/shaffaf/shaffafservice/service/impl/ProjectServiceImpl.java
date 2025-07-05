@@ -34,57 +34,6 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
     @Override
-    public ProjectDTO save(ProjectDTO projectDTO) {
-        LOG.debug("Request to save Project : {}", projectDTO);
-        Project project = projectMapper.toEntity(projectDTO);
-        project = projectRepository.save(project);
-        return projectMapper.toDto(project);
-    }
-
-    @Override
-    public ProjectDTO update(ProjectDTO projectDTO) {
-        LOG.debug("Request to update Project : {}", projectDTO);
-        Project project = projectMapper.toEntity(projectDTO);
-        project = projectRepository.save(project);
-        return projectMapper.toDto(project);
-    }
-
-    @Override
-    public Optional<ProjectDTO> partialUpdate(ProjectDTO projectDTO) {
-        LOG.debug("Request to partially update Project : {}", projectDTO);
-
-        return projectRepository
-            .findById(projectDTO.getId())
-            .map(existingProject -> {
-                projectMapper.partialUpdate(existingProject, projectDTO);
-
-                return existingProject;
-            })
-            .map(projectRepository::save)
-            .map(projectMapper::toDto);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Page<ProjectDTO> findAll(Pageable pageable) {
-        LOG.debug("Request to get all Projects");
-        return projectRepository.findAll(pageable).map(projectMapper::toDto);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Optional<ProjectDTO> findOne(Long id) {
-        LOG.debug("Request to get Project : {}", id);
-        return projectRepository.findById(id).map(projectMapper::toDto);
-    }
-
-    @Override
-    public void delete(Long id) {
-        LOG.debug("Request to delete Project : {}", id);
-        projectRepository.deleteById(id);
-    }
-
-    @Override
     @Transactional
     public ProjectDTO createProjectNative(ProjectDTO projectDTO, String username) {
         LOG.debug("Request to create Project using native query : {}", projectDTO);

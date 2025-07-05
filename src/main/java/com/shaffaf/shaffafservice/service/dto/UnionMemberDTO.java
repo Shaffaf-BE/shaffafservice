@@ -1,5 +1,6 @@
 package com.shaffaf.shaffafservice.service.dto;
 
+import com.shaffaf.shaffafservice.util.PhoneNumberUtil;
 import jakarta.validation.constraints.*;
 import java.io.Serializable;
 import java.time.Instant;
@@ -23,6 +24,7 @@ public class UnionMemberDTO implements Serializable {
     private String email;
 
     @NotNull
+    @Pattern(regexp = PhoneNumberUtil.PAKISTANI_MOBILE_REGEX, message = PhoneNumberUtil.INVALID_PHONE_ERROR_MESSAGE)
     private String phoneNumber;
 
     private String createdBy;
@@ -34,6 +36,8 @@ public class UnionMemberDTO implements Serializable {
     private Instant lastModifiedDate;
 
     private Instant deletedOn;
+
+    private Boolean isUnionHead;
 
     private ProjectDTO project;
 
@@ -117,6 +121,14 @@ public class UnionMemberDTO implements Serializable {
         this.deletedOn = deletedOn;
     }
 
+    public Boolean getIsUnionHead() {
+        return isUnionHead;
+    }
+
+    public void setIsUnionHead(Boolean isUnionHead) {
+        this.isUnionHead = isUnionHead;
+    }
+
     public ProjectDTO getProject() {
         return project;
     }
@@ -158,8 +170,8 @@ public class UnionMemberDTO implements Serializable {
             ", createdBy='" + getCreatedBy() + "'" +
             ", createdDate='" + getCreatedDate() + "'" +
             ", lastModifiedBy='" + getLastModifiedBy() + "'" +
-            ", lastModifiedDate='" + getLastModifiedDate() + "'" +
-            ", deletedOn='" + getDeletedOn() + "'" +
+            ", lastModifiedDate='" + getLastModifiedDate() + "'" +            ", deletedOn='" + getDeletedOn() + "'" +
+            ", isUnionHead='" + getIsUnionHead() + "'" +
             ", project=" + getProject() +
             "}";
     }
